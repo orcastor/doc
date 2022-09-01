@@ -2,7 +2,12 @@ module.exports = {
     title: 'OrcaS',
     description: '一款开箱即用的轻量级对象存储',
     base: "/doc/",
+    head: [
+        ['link', { rel: 'icon', href: '/favicon.ico' }]
+    ],
     themeConfig: {
+        logo: '/favicon.ico',
+
         // 假定是 GitHub. 同时也可以是一个完整的 GitLab URL
         repo: 'orcastor/orcas',
         // 自定义仓库链接文字。默认从 `themeConfig.repo` 中自动推断为
