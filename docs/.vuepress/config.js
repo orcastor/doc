@@ -6,7 +6,7 @@ module.exports = {
         ['link', { rel: 'icon', href: '/favicon.ico' }]
     ],
     themeConfig: {
-        logo: '/favicon.ico',
+        logo: '/logo.png',
 
         // 假定是 GitHub. 同时也可以是一个完整的 GitLab URL
         repo: 'orcastor/orcas',
