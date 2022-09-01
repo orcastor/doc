@@ -1,0 +1,16 @@
+{
+  "name": "orcas-doc",
+  "version": "1.0.0",
+  "main": "index.js",
+  "description": "Orcas - 一款开箱即用的轻量级对象存储",
+  "repository": "https://github.com/orcastor/doc.git",
+  "author": "Orca <orca.zhang@yahoo.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "vuepress": "^1.9.7"
+  },
+  "scripts": {
+    "docs:dev": "vuepress dev docs",
+    "docs:build": "vuepress build docs"
+  }
+}
