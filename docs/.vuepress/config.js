@@ -8,11 +8,11 @@ module.exports = {
         /*'/en/': {
             lang: 'en-US', // 将会被设置为 <html> 的 lang 属性
             title: 'OrcaS',
-            description: 'A out-of-box light weight object storage'
+            description: 'An out-of-box, light weight object storage'
         },*/
     },
     title: 'OrcaS',
-    description: 'A out-of-box light weight object storage',
+    description: 'An out-of-box, light weight object storage',
     base: "/doc/",
     head: [
         ['link', { rel: 'icon', href: '/favicon.ico' }],
