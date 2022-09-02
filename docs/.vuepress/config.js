@@ -15,7 +15,7 @@ module.exports = {
     description: 'An out-of-box, light weight object storage',
     base: "/doc/",
     head: [
-        ['link', { rel: 'icon', href: '/logo.svg' }],
+        ['link', { rel: 'icon', href: '/favicon.ico' }],
         [
             "meta",
             {
@@ -28,7 +28,7 @@ module.exports = {
         lineNumbers: true, // 代码块显示行号
     },
     themeConfig: {
-        logo: '/logo.png',
+        logo: '/logo.svg',
         locales: {
             '/': {
                 nav: [
