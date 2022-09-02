@@ -15,7 +15,7 @@ module.exports = {
     description: 'An out-of-box, light weight object storage',
     base: "/doc/",
     head: [
-        ['link', { rel: 'icon', href: '/favicon.ico' }],
+        ['link', { rel: 'icon', href: '/logo.svg' }],
         [
             "meta",
             {
