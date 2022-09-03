@@ -63,7 +63,7 @@ module.exports = {
                 sidebar: {
                     "/orcas/": [
                         {
-                            title: "设计思路",
+                            title: "设计对象存储",
                             collapsable: false, // 可选的, 默认值是 true,
                             children: [
                                 "/orcas/",
