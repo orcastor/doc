@@ -67,6 +67,9 @@ module.exports = {
                             collapsable: false, // 可选的, 默认值是 true,
                             children: [
                                 "/orcas/",
+                                "/orcas/DESIGN.md",
+                                "/orcas/FAQ.md",
+                                "/orcas/TODO.md",
                             ],
                         },
                     ]
