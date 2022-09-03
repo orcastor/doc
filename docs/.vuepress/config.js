@@ -63,13 +63,12 @@ module.exports = {
                 sidebar: {
                     "/orcas/": [
                         {
-                            title: "快速开始",
+                            title: "设计思路",
                             collapsable: false, // 可选的, 默认值是 true,
                             children: [
                                 "/orcas/",
                                 "/orcas/DESIGN.md",
                                 "/orcas/FAQ.md",
-                                "/orcas/TODO.md",
                             ],
                         },
                     ]
