@@ -73,6 +73,15 @@
 
 这里我们选择的是父子id方案
 
+## 数据设计
+
+数据存储方式和ceph、OpenStack Swift以及常见对象存储设计类似，用对象的名称做hash，第一级为hash十六进制字符串的最后三个字母，第二级为hash值，第三级为对象名称。
+
+## ID生成方案设计
+
+并没有使用数据库主键的方式，这有几个方面的考量，一个是后续扩展为多节点时，用额外的id生成器。
+参考MongoDB的对象ID的设计，前半部分是时间戳，后面是实例号和序号，正好和snowflake雪花❄️算法也接近。
+
 ## 接口设计
 
 - 批量写入对象信息，同时可以带部分对象的秒传/秒传预筛选
@@ -96,10 +105,10 @@
 
 ``` go
 type ObjectInfo struct {
-	ID     int64  `borm:"id"`    // 对象ID（idgen随机生成的id）
-	PID    int64  `borm:"pid"`   // 父对象ID
-	MTime  int64  `borm:"mtime"` // 更新时间，秒级时间戳
-	DataID int64  `borm:"did"`   // 数据ID，如果为0，说明没有数据（新创建的文件，DataID就是对象ID，作为对象的首版本数据）
+	ID     int64  `borm:"id"`     // 对象ID（idgen随机生成的id）
+	PID    int64  `borm:"pid"`    // 父对象ID
+	MTime  int64  `borm:"mtime"`  // 更新时间，秒级时间戳
+	DataID int64  `borm:"did"`    // 数据ID，如果为0，说明没有数据（新创建的文件，DataID就是对象ID，作为对象的首版本数据）
 	Type   int    `borm:"type"`   // 对象类型，0: none, 1: dir, 2: file, 3: version, 4: preview(thumb/m3u8/pdf)
 	Status int    `borm:"status"` // 对象状态，0: none, 1: normal, 1: deleted, 2: recycle(to be deleted), 3: malformed
 	Name   string `borm:"name"`   // 对象名称
@@ -138,7 +147,7 @@ type DataInfo struct {
 }
 ```
 
-## 端到端的实现
+## 重要逻辑
 
 在客户端实现打包和组装、加解密和解压缩逻辑。本地的实现，数据直接写入存储；远端的实现，数据通过rpc传输，调用方无法感觉到差别。
 
@@ -153,6 +162,3 @@ type DataInfo struct {
 
 如果两个数据的哈希值和长度完全相同，那我们认为他们是完全等同的，那么对象可以使用相同的数据信息（同样的数据ID），为了防止引用过程中可能被同时删除的问题，我们引入一个相对较长的时间窗口即可，需要同时提供MD5和CRC32，是因为存在哈希冲突和漏洞问题。
 
-### id生成方案
-
-- TBD
