@@ -1,4 +1,6 @@
-# 领域模型
+# 设计方案
+
+## 领域模型
 
 主要分为用户、存储两部分，它们之间的关联是访问和权限控制
 
@@ -33,15 +35,16 @@
 
 4. 数据引用/秒传（对象级重复数据删除）
 
-- 校验值满足完整性校验本身就需要提供，现在还能额外支持对象级重复数据删除
-- 秒传的数据引用功能还能够用于云端复制和剪切功能，只需要提供索引（目录信息）即可
-- **`OrcaS`将从一开始就支持秒传，数据独立于元数据，而非依附于元数据存在而存在（后续实现会相对比较复杂）**
+- 校验值满足完整性校验本身就需要提供，现在还能额外支持对象级重复数据删除，秒传的数据引用功能还能够用于云端复制和剪切功能，只需要提供索引（目录信息）即可
+- **`OrcaS`从一开始就支持秒传，数据独立于元数据，而非依附于元数据存在而存在（后续实现会相对比较复杂）**
 
 5. 支持常见压缩方法
 
-- snappy、zstd、gzip等
+- 支持snappy、zstd、gzip等
 
-6. 支持加密方法（数据私有安全，常见的国密SM4、国际AES-256）
+6. 支持常见加密方法
+
+- 保障数据私有安全，支持国密SM4、AES-256等
 
 - 拥有正确密钥的设备才能在设备端访问数据（全链路）
 
@@ -91,15 +94,49 @@
 - 幂等操作id
 - 快照版本
 
+``` go
+type ObjectInfo struct {
+	ID     int64  `borm:"id"`    // 对象ID（idgen随机生成的id）
+	PID    int64  `borm:"pid"`   // 父对象ID
+	MTime  int64  `borm:"mtime"` // 更新时间，秒级时间戳
+	DataID int64  `borm:"did"`   // 数据ID，如果为0，说明没有数据（新创建的文件，DataID就是对象ID，作为对象的首版本数据）
+	Type   int    `borm:"type"`   // 对象类型，0: none, 1: dir, 2: file, 3: version, 4: preview(thumb/m3u8/pdf)
+	Status int    `borm:"status"` // 对象状态，0: none, 1: normal, 1: deleted, 2: recycle(to be deleted), 3: malformed
+	Name   string `borm:"name"`   // 对象名称
+	Size   int64  `borm:"size"`   // 对象的大小，目录的大小是子对象数，文件的大小是最新版本的字节数
+	Ext    string `borm:"ext"`    // 对象的扩展信息
+}
+```
+
 ### 【数据的属性】
 
 - 是否压缩
 - 是否加密
 - 原始MD5值
 - 原始CRC32值
-- 前32KB头部CRC32值
+- 前100KB头部CRC32值
 - 8KB对齐，最大尽量在4MB以内
 - 打包块的ID和偏移位置
+
+``` go
+
+
+type DataInfo struct {
+	ID       int64  `borm:"id"`        // 数据ID（对象ID/版本ID，idgen随机生成的id）
+	Size     int64  `borm:"size"`      // 数据的大小
+	OrigSize int64  `borm:"o_size"`    // 数据的原始大小
+	HdrCRC32 uint32 `borm:"hdr_crc32"` // 头部100KB的CRC32校验值
+	CRC32    uint32 `borm:"crc32"`     // 整个对象的CRC32校验值（最原始数据）
+	MD5      string `borm:"md5"`       // 整个对象的MD5值（最原始数据）
+
+	Checksum uint32 `borm:"checksum"` // 整个对象的CRC32校验值（最终数据，用于一致性审计）
+	Kind     uint32 `borm:"kind"`     // 数据状态，正常、损坏、加密、压缩、类型（用于预览等）
+
+	// PkgID不为0说明是打包数据
+	PkgID     int64 `borm:"pkg_id"`  // 打包数据的ID（也是idgen生成的id）
+	PkgOffset int   `borm:"pkg_off"` // 打包数据的偏移位置
+}
+```
 
 ## 端到端的实现
 
