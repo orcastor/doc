@@ -92,16 +92,16 @@
 
 ### 【对象的属性】
 
-- 父级的id
+- 父级的ID
 - 对象名称
 - 对象大小
 - 创建时间
 - 修改时间（如果没有，那就是创建时间）
 - 访问时间（如果没有，那就是修改时间>创建时间）
 - 对象的类型
-- 数据id
-- 幂等操作id
-- 快照版本
+- 数据ID
+- 幂等操作ID
+- 快照版本ID
 
 ``` go
 type ObjectInfo struct {
@@ -128,8 +128,6 @@ type ObjectInfo struct {
 - 打包块的ID和偏移位置
 
 ``` go
-
-
 type DataInfo struct {
 	ID       int64  `borm:"id"`        // 数据ID（对象ID/版本ID，idgen随机生成的id）
 	Size     int64  `borm:"size"`      // 数据的大小
