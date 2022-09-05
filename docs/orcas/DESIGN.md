@@ -142,7 +142,12 @@ func toFilePath(path string, bcktID, dataID int64, sn int) string {
 
 ## ID生成方案设计
 
-并没有使用数据库主键的方案，这有几个方面的考量，一个是后续扩展为多节点时，用额外的id生成器便于服务迁移和无缝切换为集群版本。并且没有限制ID的生成，可以主动生成后传入，和MongoDB类似。
+大致需求：
+- 默认单机的，如果是分布式的，可以通过配置redis连接地址来快速支持
+- 没有限制ID的生成，可以主动生成后传入，和MongoDB类似
+- 生成的ID能够随着时间推移，单调递增
+
+并没有使用数据库主键的方案，这有几个方面的考量，一个是后续扩展为多节点时，用额外的id生成器便于服务迁移和无缝切换为集群版本；一个是能够自带时间维度的信息。
 这里参考MongoDB的对象ID的设计，前半部分是时间戳，后面是实例号和序号，正好和snowflake雪花❄️算法也接近。目前设计的是前40位存储秒级时间戳，中间4位存储实例号，最后20位存储序列号。
 
 具体实现见[orca-zhang/idgen](https://github.com/orca-zhang/idgen)
@@ -154,16 +159,59 @@ func toFilePath(path string, bcktID, dataID int64, sn int) string {
 - 批量写入对象信息，同时可以带部分对象的秒传/秒传预筛选
 - 读取对象信息
 - 列举对象信息：无限加载模式，支持按对象名、对象类型过滤，支持对象名称、大小、时间排序
+```go
+type ListOptions struct {
+	Word  string // 过滤词，支持通配符*和?
+	Delim string // 分隔符，每次请求后返回，原样回传即可
+	Type  int    // 对象类型，0: 不过滤(default), 1: dir, 2: file, 3: version, 4: preview(thumb/m3u8/pdf)
+	Count int    // 查询个数
+	Order string // 排序方式，id/mtime/name/size/type 前缀 +: 升序（默认） -: 降序
+	Brief int    // 显示更少内容(只在网络传输层，节省流量时有效)，0: FULL(default), 1: without EXT, 2:only ID
+}
+```
 - 随机读取数据的一部分（在线播放和在线预览等）
-- ID生成器，默认单机的，如果是分布式的，可以通过配置支持
 
-- TODO：展开说说
+```go
+type Handler interface {
+	// 传入underlying，返回当前的，构成链式调用
+	New(h Handler) Handler
+	Close()
 
-## 重要逻辑
+	SetOptions(opt Options)
 
-在客户端实现打包和组装、加解密和解压缩逻辑。本地的实现，数据直接写入存储；远端的实现，数据通过rpc传输，调用方无法感觉到差别。
+	// 只有文件长度、HdrCRC32是预Ref，如果成功返回新DataID，失败返回0
+	// 有文件长度、CRC32、MD5，成功返回引用的DataID，失败返回0，客户端发现DataID有变化，说明不需要上传数据
+	// 如果非预Ref DataID传0，说明跳过了预Ref
+	Ref(c Ctx, bktID int64, d []*DataInfo) ([]int64, error)
+	// 打包上传或者小文件，sn传-1，大文件sn从0开始，DataID不传默认创建一个新的
+	PutData(c Ctx, bktID, dataID int64, sn int, buf []byte) (int64, error)
+	// 上传完数据以后，再创建元数据
+	PutDataInfo(c Ctx, bktID int64, d []*DataInfo) ([]int64, error)
+	// 获取数据信息
+	GetDataInfo(c Ctx, bktID, id int64) (*DataInfo, error)
+	// 只传一个参数说明是sn，传两个参数说明是sn+offset，传三个参数说明是sn+offset+size
+	GetData(c Ctx, bktID, id int64, sn int, offset ...int) ([]byte, error)
+	// 用于非文件内容的扫描，只看文件是否存在，大小是否合适
+	FileSize(c Ctx, bktID, dataID int64, sn int) (int64, error)
 
-### 上传对象的过程
+	// 垃圾回收时有数据没有元数据引用的为脏数据（需要留出窗口时间），有元数据没有数据的为损坏数据
+	Put(c Ctx, bktID int64, o []*ObjectInfo) ([]int64, error)
+	Get(c Ctx, bktID int64, ids []int64) ([]*ObjectInfo, error)
+	List(c Ctx, bktID, pid int64, opt ListOptions) (o []*ObjectInfo, cnt int64, delim string, err error)
+
+	Rename(c Ctx, bktID, id int64, name string) error
+	MoveTo(c Ctx, bktID, id, pid int64) error
+
+	Recycle(c Ctx, bktID, id int64) error
+	Delete(c Ctx, bktID, id int64) error
+}
+```
+
+这套接口可以说是整个系统的灵魂所在，未来网络层、多副本、多节点、多集群等都会在这套接口上进行扩展和实现（有可能会有改动和调整）。`OrcaS`并没有使用轻客户端重服务端的方式，而是使用sdk的方式，分摊部分计算和逻辑到客户端完成，比如数据块的打包压缩等，从输入端就做好，这样也便于在接口层面做到端到端的统一，对于sdk来说，不需要关心`Handler`是来自哪一层，包括了那些特性，对sdk来说它们看上去都是一样的。在客户端实现打包和组装、加解密和解压缩逻辑。本地的实现，数据直接写入存储；远端的实现，数据通过rpc传输，调用方无法感觉到差别。
+
+## 上传逻辑
+
+### 过程描述
 
 1. 读取hdrCRC32和长度，来预检查是否可能秒传（可以用阈值来优化小对象直接跳过预检查）
 2. 没有可能匹配的直接上传
@@ -173,3 +221,11 @@ func toFilePath(path string, bcktID, dataID int64, sn int) string {
 ### 秒传的实现逻辑
 
 如果两个数据的哈希值和长度完全相同，那我们认为他们是完全等同的，那么对象可以使用相同的数据信息（同样的数据ID），为了防止引用过程中可能被同时删除的问题，我们引入一个相对较长的时间窗口即可，需要同时提供MD5和CRC32，是因为存在哈希冲突和漏洞问题。MD5算法选择32位的来减少空间使用，提高匹配效率，虽然这样会增加冲突概率，但是同时会有CRC32存在防止冲突。
+
+### 展开说说
+
+
+## 下载逻辑
+
+
+### 展开说说
