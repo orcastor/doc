@@ -79,7 +79,7 @@
 
 ## ID生成方案设计
 
-并没有使用数据库主键的方式，这有几个方面的考量，一个是后续扩展为多节点时，用额外的id生成器。
+并没有使用数据库主键的方式，这有几个方面的考量，一个是后续扩展为多节点时，用额外的id生成器便于服务迁移和无缝切换为集群版本。
 参考MongoDB的对象ID的设计，前半部分是时间戳，后面是实例号和序号，正好和snowflake雪花❄️算法也接近。
 
 ## 接口设计
@@ -129,14 +129,14 @@ type ObjectInfo struct {
 
 ``` go
 type DataInfo struct {
-	ID       int64  `borm:"id"`        // 数据ID（对象ID/版本ID，idgen随机生成的id）
+	ID       int64  `borm:"id"`        // 数据ID（idgen随机生成的id）
 	Size     int64  `borm:"size"`      // 数据的大小
 	OrigSize int64  `borm:"o_size"`    // 数据的原始大小
 	HdrCRC32 uint32 `borm:"hdr_crc32"` // 头部100KB的CRC32校验值
-	CRC32    uint32 `borm:"crc32"`     // 整个对象的CRC32校验值（最原始数据）
-	MD5      string `borm:"md5"`       // 整个对象的MD5值（最原始数据）
+	CRC32    uint32 `borm:"crc32"`     // 整个数据的CRC32校验值（最原始数据）
+	MD5      string `borm:"md5"`       // 整个数据的MD5值（最原始数据）
 
-	Checksum uint32 `borm:"checksum"` // 整个对象的CRC32校验值（最终数据，用于一致性审计）
+	Checksum uint32 `borm:"checksum"` // 整个数据的CRC32校验值（最终数据，用于一致性审计）
 	Kind     uint32 `borm:"kind"`     // 数据状态，正常、损坏、加密、压缩、类型（用于预览等）
 
 	// PkgID不为0说明是打包数据
