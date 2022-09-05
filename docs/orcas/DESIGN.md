@@ -158,6 +158,7 @@ func toFilePath(path string, bcktID, dataID int64, sn int) string {
 
 - 批量写入对象信息，同时可以带部分对象的秒传/秒传预筛选
 - 读取对象信息
+- 读写数据、随机读取数据的一部分（在线播放和在线预览等）
 - 列举对象信息：无限加载模式，支持按对象名、对象类型过滤，支持对象名称、大小、时间排序
 ```go
 type ListOptions struct {
@@ -169,7 +170,8 @@ type ListOptions struct {
 	Brief int    // 显示更少内容(只在网络传输层，节省流量时有效)，0: FULL(default), 1: without EXT, 2:only ID
 }
 ```
-- 随机读取数据的一部分（在线播放和在线预览等）
+
+定义接口如下：
 
 ```go
 type Handler interface {
@@ -209,6 +211,10 @@ type Handler interface {
 
 这套接口可以说是整个系统的灵魂所在，未来网络层、多副本、多节点、多集群等都会在这套接口上进行扩展和实现（有可能会有改动和调整）。`OrcaS`并没有使用轻客户端重服务端的方式，而是使用sdk的方式，分摊部分计算和逻辑到客户端完成，比如数据块的打包压缩等，从输入端就做好，这样也便于在接口层面做到端到端的统一，对于sdk来说，不需要关心`Handler`是来自哪一层，包括了那些特性，对sdk来说它们看上去都是一样的。在客户端实现打包和组装、加解密和解压缩逻辑。本地的实现，数据直接写入存储；远端的实现，数据通过rpc传输，调用方无法感觉到差别。
 
+### 奇妙的设计
+
+Ref\PutDataInfo\Put关于负数ID的设计
+
 ## 上传逻辑
 
 ### 过程描述
@@ -227,5 +233,25 @@ type Handler interface {
 
 ## 下载逻辑
 
+
+### 展开说说
+
+## SDK配置详解
+
+``` go
+type Config struct {
+	DataSync bool   // 断电保护策略(Power-off Protection Policy)，强制每次写入数据后刷到磁盘
+	RefLevel uint32 // 秒传级别设置：0: OFF（默认） / 1: Ref / 2: TryRef+Ref
+	PkgThres uint32 // 打包个数限制，不设置默认100个
+	WiseCmpr uint32 // 智能压缩，根据文件类型决定是否压缩，取值见core.DATA_CMPR_MASK
+	EndecWay uint32 // 加密方式，取值见core.DATA_ENDEC_MASK
+	EndecKey string // 加密KEY，SM4需要固定为16个字符，AES256需要大于16个字符
+	DontSync string // 不同步的文件名通配符（https://pkg.go.dev/path/filepath#Match），用分号分隔
+	Conflict uint32 // 同名冲突后，0: Merge or Cover（默认） / 1: Throw / 2: Rename / 3: Skip
+	NameTail string // 重命名尾巴，"-副本" / "{\d}"
+	ChkPtDir string // 断点续传记录目录，不设置路径默认不开启
+	BEDecmpr bool   // 后端解压，PS：必须是非加密数据
+}
+```
 
 ### 展开说说
