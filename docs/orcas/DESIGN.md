@@ -222,7 +222,7 @@ type Handler interface {
 ``` go
 type Config struct {
 	DataSync bool   // 断电保护策略(Power-off Protection Policy)，强制每次写入数据后刷到磁盘
-	RefLevel uint32 // 秒传级别设置：0: OFF（默认） / 1: Ref / 2: TryRef+Ref
+	RefLevel uint32 // 秒传级别设置：OFF（默认） / FULL: Ref / FAST: TryRef+Ref
 	PkgThres uint32 // 打包个数限制，不设置默认100个
 	WiseCmpr uint32 // 智能压缩，根据文件类型决定是否压缩，取值见core.DATA_CMPR_MASK
 	EndecWay uint32 // 加密方式，取值见core.DATA_ENDEC_MASK
@@ -241,7 +241,7 @@ PS：别怀疑，我有强迫症，连配置名字都要搞整齐。
 
 ### 单个文件上传过程描述
 
-1. 读取hdrCRC32和大小，来预检查是否可能秒传（可以用阈值来优化小对象直接跳过预检查）
+1. 读取头部CRC32和大小，来预检查是否可能秒传（可以用阈值来优化小对象直接跳过预检查）
 2. 没有可能匹配的直接上传
 3. 有可能匹配的，计算整个对象的MD5和CRC32后继续尝试秒传
 4. 秒传失败，转普通上传
@@ -253,7 +253,6 @@ PS：别怀疑，我有强迫症，连配置名字都要搞整齐。
 ### 核心逻辑描述
 
 这里用到了层序遍历，用一个slice当作队列来实现目录对象的进出队，列举到目录时，就把目录放到队列尾部，如果队列不为空，就读取目录下的子目录和文件。
-
 ```go
     // 定义一个slice队列
 	q := []elem{{id: dirIDs[0], path: lpath}}
@@ -278,8 +277,7 @@ PS：别怀疑，我有强迫症，连配置名字都要搞整齐。
 	}
 ```
 
-文件上传涉及到秒传的部分用到了分治法，由于秒传有三个级别，预秒传得到的结果是秒传或者普通上传，秒传得到的结果是只传对象信息或普通上传，普通上传是上传数据、上传数据信息、上传对象信息。所以设计成了类似状态机的形式，预秒传得到的结果分成两部分成功迁移到秒传或者失败迁移到普通上传，秒传失败得到的结果迁移到普通上传，最不理想情况下，递归嵌套为三层，也即预秒传失败->秒传失败->普通上传。
-
+文件上传涉及到秒传的部分用到了分治法，由于秒传有三个级别，预秒传得到的结果是秒传或者普通上传，秒传得到的结果是只传对象信息或普通上传，普通上传是上传数据、上传数据信息、上传对象信息。所以设计成了配置复用状态机（同样三个状态，但是语义不同）的形式，预秒传得到的结果分两部分迁移到秒传或者普通上传，秒传失败的结果迁移到普通上传。最不理想情况下，最多递归嵌套三层，没有爆栈风险，也即预秒传失败->秒传失败->普通上传。
 ```go
 		// 预秒传部分代码
 		ids, _ := osi.h.Ref(c, bktID, d)
@@ -298,12 +296,49 @@ PS：别怀疑，我有强迫症，连配置名字都要搞整齐。
 		osi.uploadFiles(c, bktID, path, f1, d1, FULL, action|HDR_CRC32)
 		// 失败部分到普通上传
 		osi.uploadFiles(c, bktID, path, f2, d2, OFF, action|HDR_CRC32)
-		// PS：标记HDR_CRC32已经读取过了
 
 		// 详见：https://github.com/orcastor/orcas/blob/master/sdk/data.go#L273
 ```
 
 文件读取这里还有一个优化是每次会告知下一次调用，上一次已经准备好了哪些数据，下一层不再需要读取和计算了。主要是hdrCRC32、数据的文件类型、CRC32、MD5三部分，这样最差情况也只需要读取文件两次+一个头部。
+```go
+		// PS：需要进行秒传操作，读取完整文件，但是标记HDR_CRC32已经读取过了
+		osi.uploadFiles(c, bktID, path, f1, d1, FULL, action|HDR_CRC32)
+```
+
+在读取头部CRC32的同时，如果开启压缩，这里会根据文件类型判断是否命中压缩率较高的文件类型（目前设置的jpg、png、常见压缩格式），而自动取消压缩。（浪费CPU并且压缩效果很差或者可能会负压缩）
+```go
+	// 如果开启智能压缩的，检查文件类型确定是否要压缩
+	if l.cfg.WiseCmpr > 0 {
+		kind, _ := filetype.Match(buf)
+		if CmprBlacklist[kind.MIME.Value] == 0 {
+			// 不在黑名单里，开启压缩
+			l.d.Kind |= l.cfg.WiseCmpr
+			if l.cfg.WiseCmpr&core.DATA_CMPR_SNAPPY != 0 {
+				l.cmpr = &archiver.Snappy{}
+			} else if l.cfg.WiseCmpr&core.DATA_CMPR_ZSTD != 0 {
+				l.cmpr = &archiver.Zstd{}
+			} else if l.cfg.WiseCmpr&core.DATA_CMPR_GZIP != 0 {
+				l.cmpr = &archiver.Gz{}
+			}
+		}
+		// 如果是黑名单类型，不压缩
+	}
+```
+
+或者小文件在压缩后数据反而变大了，关闭压缩。
+```go
+	// 如果压缩后更大了，恢复原始的
+	if l.d.OrigSize < PKG_SIZE {
+		if l.cmprBuf.Len() >= len(buf) {
+			l.d.Kind &= ^core.DATA_CMPR_MASK
+			cmprBuf = buf
+		} else {
+			cmprBuf = l.cmprBuf.Bytes()
+		}
+		l.cmprBuf.Reset()
+	}
+```
 
 对于小文件来说，还有一个打包上传的优化逻辑，批量上传文件时，先按文件大小进行排序，如果打包还有足够的空间并且个数没有超过，就放置到打包里，上传后，数据信息记录的是打包的ID和偏移位置。
 ```go
@@ -311,6 +346,27 @@ PS：别怀疑，我有强迫症，连配置名字都要搞整齐。
 ```
 
 如果配置中开启了加密压缩，先压缩后加密（最终数据的尺寸更小，占用空间更少）即可。
+```go
+	// 上传数据
+	if l.action&UPLOAD_DATA != 0 {
+		var cmprBuf []byte
+		if l.d.Kind&core.DATA_CMPR_MASK == 0 {
+			cmprBuf = buf
+		} else {
+			l.cmpr.Compress(bytes.NewBuffer(buf), &l.cmprBuf)
+			if l.cmprBuf.Len() >= PKG_SIZE {
+				cmprBuf = l.cmprBuf.Next(PKG_SIZE)
+			}
+		}
+
+		if cmprBuf != nil {
+			// 加密
+			encodedBuf, _ := l.encode(cmprBuf)
+		}
+
+		// 上传encodedBuf...
+	}
+```
 
 关于对象重名冲突部分：目前还未实现。
 
