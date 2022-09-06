@@ -66,7 +66,7 @@
    </tr>
 </table>
 
-这里我们选择的是父子id方案。
+这里我们选择的是父子id方案，并且并不限制`name`，也可以在`name`中放置`/`来当对象存储使用。
 
 ### 【对象的属性】
 
@@ -132,9 +132,9 @@ PS: 这里的MD5使用的是32位的，按理本可以使用`uint64`存储，以
 ```go
 // path/<文件名hash的最后三个字节>/hash
 func toFilePath(path string, bcktID, dataID int64, sn int) string {
-	fn := fmt.Sprintf("%d_%d", dataID, sn)
-	hash := fmt.Sprintf("%X", md5.Sum([]byte(fn)))
-	return filepath.Join(path, fmt.Sprint(bcktID), hash[21:24], hash[8:24], fn)
+	fileName := fmt.Sprintf("%d_%d", dataID, sn)
+	hash := fmt.Sprintf("%X", md5.Sum([]byte(fileName)))
+	return filepath.Join(path, fmt.Sprint(bcktID), hash[21:24], hash[8:24], fileName)
 }
 ```
 
@@ -213,14 +213,14 @@ type Handler interface {
 
 ### 奇妙的设计
 
-Ref\PutDataInfo\Put关于负数ID的设计：
+`Ref`、`PutDataInfo`、`Put`关于负数ID的设计：
 - Ref返回的ID如果有负数，说明在同一批中，找到了相同的数据，以下标反码的方式指出，比如引用了第0个元素，那返回就是`^0`，刚好是负数的最小值，以此类推；而在上传对象信息或者数据信息的时候，同样可以引用还未生成ID的其他对象，以实现批量创建一批存在父子关系的对象的效果。
 
 ## 上传逻辑
 
 ### 过程描述
 
-1. 读取hdrCRC32和长度，来预检查是否可能秒传（可以用阈值来优化小对象直接跳过预检查）
+1. 读取hdrCRC32和大小，来预检查是否可能秒传（可以用阈值来优化小对象直接跳过预检查）
 2. 没有可能匹配的直接上传
 3. 有可能匹配的，计算整个对象的MD5和CRC32后继续尝试秒传
 4. 秒传失败，转普通上传
@@ -255,4 +255,9 @@ type Config struct {
 }
 ```
 
+PS：别怀疑，我有强迫症，连配置名字都要搞整齐。
+
 ### 展开说说
+
+
+## 引用文档

@@ -3,7 +3,7 @@ module.exports = {
         '/': {
             lang: 'zh-CN',
             title: 'OrcaS',
-            description: '一款开箱即用的轻量级对象存储'
+            description: '一款开箱即用的轻量级对象文件系统'
         },
         /*'/en/': {
             lang: 'en-US', // 将会被设置为 <html> 的 lang 属性
@@ -63,7 +63,7 @@ module.exports = {
                 sidebar: {
                     "/orcas/": [
                         {
-                            title: "从0开始设计对象存储",
+                            title: "从0开始设计对象文件系统",
                             collapsable: false, // 可选的, 默认值是 true,
                             children: [
                                 "/orcas/",
