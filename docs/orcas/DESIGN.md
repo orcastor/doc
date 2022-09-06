@@ -16,7 +16,7 @@
 
 ### 关于存储选型
 
-数据部分为什么用自研存储而不是RocksDB？因为LSM类的实现存在写放大问题严重。元数据部分用关系型数据库存储因为查询和排序比较方便，也可以改用合适的KV存储，后续可以看场景和性能测试而定。
+数据部分为什么用自研存储而不是RocksDB？因为LSM类的实现存在写放大问题。而元数据部分用关系型数据库存储因为查询和排序比较方便，也可以改用合适的KV存储，后续可以看场景和性能测试而定。
 
 ### 默认约定
 
@@ -127,7 +127,7 @@ PS: 这里的MD5使用的是32位的，按理本可以使用`uint64`存储，以
 
 ### 数据设计
 
-数据存储方式和Ceph、Swift以及常见对象存储设计类似，用对象的名称做hash，第一级为hash十六进制字符串的最后三个字符，第二级为hash值，第三级为数据名称，数据名称这里我们设置为`"数据ID-数据块序号SN"`。咱们来分析一下，由于hash的存在，所以即使是同一个数据的多个数据块也不会存储在同一个目录下，三个字母会有4096个组合，也即会均匀分散到四千多个目录里。
+数据存储方式和Ceph、Swift以及常见对象存储设计类似，对名称做hash，第一级为hash十六进制字符串的最后三个字符，第二级为hash值，第三级为数据名称，数据名称这里我们设置为`"数据ID-数据块序号SN"`。咱们来分析一下，由于hash的存在，所以即使是同一个数据的多个数据块也不会存储在同一个目录下，三个字母会有4096个组合，也即会均匀分散到四千多个目录里，而第三级的实际名称能在hash发生冲突时解决冲突。
 
 ```go
 // path/<文件名hash的最后三个字节>/hash
@@ -161,11 +161,9 @@ func EmptyDataInfo() *DataInfo {
 - 生成的ID能够随着时间推移，单调递增
 
 并没有使用数据库主键的方案，这有几个方面的考量，一个是后续扩展为多节点时，用额外的ID生成器便于服务迁移和无缝切换为集群版本；一个是能够自带时间维度的信息。
-这里参考MongoDB的对象ID的设计，前半部分是时间戳，后面是实例号和序号，正好和snowflake雪花❄️算法也接近。目前设计的是前40位存储秒级时间戳，中间4位存储实例号，最后20位存储序列号。
+这里参考MongoDB的对象ID的设计，前半部分是时间戳，后面是实例号和序号，正好和snowflake雪花❄️算法也接近。目前设计的是前40位存储秒级时间戳，中间4位存储实例号（16个实例，但是可多个节点复用），最后20位存储序列号（一秒单“实例”内分配不超过100万个）。
 
-具体实现见[orca-zhang/idgen](https://github.com/orca-zhang/idgen)
-
-- TODO：展开说说
+基本思路是，用Redis(多节点）或者本地内存缓存[ecache](https://github.com/orca-zhang/ecache)（单机）存储每秒每实例的序列号，如果Redis请求发生故障，序列号部分降级为随机数，具体实现见[orca-zhang/idgen](https://github.com/orca-zhang/idgen)
 
 ## 接口设计
 
@@ -274,14 +272,14 @@ PS：别怀疑，我有强迫症，连配置名字都要对齐。
 		rawFiles, _ := ioutil.ReadDir(q[0].path)
 		for _, fi := range rawFiles {
 			if fi.IsDir() {
-				// ...
+				dirs = append(dirs, fi)
 			} else {
-				// ...
+				// 上传文件
 			}
 		}
 
 		// 上传dirs后得到子目录的ID
-		osi.h.Put(c, bktID, dirs)
+		ids, _ := osi.h.Put(c, bktID, dirs)
 		// 组装成dirElems
 		do something wit `dirElems`
 
@@ -396,9 +394,53 @@ func (dp *dataPkger) Push(c core.Ctx, h core.Handler, bktID int64, b []byte, d *
 
 ## 下载逻辑
 
-下载逻辑比较简单，列举目标对象并下载到本地。
+下载逻辑比较简单，和上传类似，只是列举本地目录改成了云端目录，列举目标对象并下载到本地。
 
-如果对象有多个版本的，下载最新版本（如果后续支持快照的，需要找到指定归档的快照ID的版本）；如果是空数据，只创建文件；如果是大文件，按SN递增下载多个文件（由于解密解压都是流式的，所以无法简单优化，对于未加密压缩的大文件，可以考虑优化成多协程下载以提高下载速度）。
+```go
+	// 遍历远端目录
+	q := []elem{{id: id, path: path}}
+	for len(q) > 0 {
+		o, _, _, _ := osi.h.List(c, bktID, q[0].id, core.ListOptions{
+			Order: "type",
+		})
+
+		for _, o := range o {
+			switch o.Type {
+			case core.OBJ_TYPE_DIR:
+				// 下载目录
+			case core.OBJ_TYPE_FILE:
+				// 下载文件
+			}
+		}
+		
+		// 弹出第一个元素
+		q = q[1:]
+	}
+```
+
+如果对象有多个版本的，下载最新版本（如果后续支持快照的，需要找到指定归档的快照ID的版本）；如果是空数据，只创建文件；如果是大文件，按`SN`递增下载多个数据块（由于解密解压都是流式的，所以无法简单优化，对于未加密压缩的大文件，可以考虑优化成多协程下载以提高下载速度）。
+
+```go
+	dataID := o.DataID
+	// 如果不是首版本，获取最新版本
+	if dataID == 0 {
+		os, _, _, _ := osi.h.List(c, bktID, o.ID, core.ListOptions{
+			Type:  core.OBJ_TYPE_VERSION,
+			Count: 1,
+			Order: "-mtime",
+		})
+		dataID = os[0].DataID
+	}
+
+	var d *core.DataInfo
+	// 如果是空数据
+	if dataID == core.EmptyDataID {
+		d = core.EmptyDataInfo()
+	} else {
+		// 否则获取数据信息
+		d, _ = osi.h.GetDataInfo(c, bktID, dataID)
+	}
+```
 
 ## 引用文档
 
