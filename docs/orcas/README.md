@@ -75,5 +75,6 @@
 
 ## 引用文档
 
+- [OpenStack的Swift组件详解](https://www.jb51.net/article/210814.htm)
 - [MinIO](https://min.io/product/kubernetes)
 - [放弃FastDFS，拥抱MinIO的7大理由](https://zhuanlan.zhihu.com/p/531850954)

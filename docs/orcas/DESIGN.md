@@ -140,6 +140,19 @@ func toFilePath(path string, bcktID, dataID int64, sn int) string {
 
 其中，`hash[8:24]`是32位MD5十六进制表示的取值部分，`hash[21:24]`是最后三个字符。
 
+空对象不上传，用固定的ID和信息占位。
+```go
+const EmptyDataID = 4708888888888
+
+func EmptyDataInfo() *DataInfo {
+	return &DataInfo{
+		ID:   EmptyDataID,
+		MD5:  "8F00B204E9800998",
+		Kind: DATA_NORMAL,
+	}
+}
+```
+
 ### ID生成方案设计
 
 大致需求：
@@ -235,7 +248,7 @@ type Config struct {
 }
 ```
 
-PS：别怀疑，我有强迫症，连配置名字都要搞整齐。
+PS：别怀疑，我有强迫症，连配置名字都要对齐。
 
 ## 上传逻辑
 
@@ -342,21 +355,32 @@ PS：别怀疑，我有强迫症，连配置名字都要搞整齐。
 
 对于小文件来说，还有一个打包上传的优化逻辑，批量上传文件时，先按文件大小进行排序，如果打包还有足够的空间并且个数没有超过，就放置到打包里，上传后，数据信息记录的是打包的ID和偏移位置。
 ```go
-		sort.Sort(SortBySize(f))
+func (dp *dataPkger) Push(c core.Ctx, h core.Handler, bktID int64, b []byte, d *core.DataInfo) (bool, error) {
+	offset := dp.buf.Len()
+	if offset+len(b) > PKG_SIZE || len(dp.infos) >= int(dp.thres) || len(b) >= PKG_SIZE {
+		return false, dp.Flush(c, h, bktID)
+	}
+	// 填充内容
+	dp.buf.Write(b)
+	// 记录偏移
+	d.PkgOffset = offset
+	// 记录下来要设置打包数据的数据信息
+	dp.infos = append(dp.infos, d)
+	return true, nil
+}
 ```
 
 如果配置中开启了加密压缩，先压缩后加密（最终数据的尺寸更小，占用空间更少）即可。
 ```go
 	// 上传数据
 	if l.action&UPLOAD_DATA != 0 {
+		// 压缩
 		var cmprBuf []byte
 		if l.d.Kind&core.DATA_CMPR_MASK == 0 {
 			cmprBuf = buf
 		} else {
 			l.cmpr.Compress(bytes.NewBuffer(buf), &l.cmprBuf)
-			if l.cmprBuf.Len() >= PKG_SIZE {
-				cmprBuf = l.cmprBuf.Next(PKG_SIZE)
-			}
+			cmprBuf = l.cmprBuf.Next(PKG_SIZE)
 		}
 
 		if cmprBuf != nil {
@@ -372,7 +396,9 @@ PS：别怀疑，我有强迫症，连配置名字都要搞整齐。
 
 ## 下载逻辑
 
-下载逻辑比较简单，列举目标对象并下载到本地即可，如果对象有多个版本的，下载最新版本（如果后续支持快照的，那就找到指定归档的快照ID的版本即可），如果是空数据，只创建文件即可，大文件按SN递增下载多个文件即可（由于解密解压都是流式的，所以无法简单的优化，对于未加密压缩的大文件，可以考虑优化成多协程下载以提高下载速度）。
+下载逻辑比较简单，列举目标对象并下载到本地。
+
+如果对象有多个版本的，下载最新版本（如果后续支持快照的，需要找到指定归档的快照ID的版本）；如果是空数据，只创建文件；如果是大文件，按SN递增下载多个文件（由于解密解压都是流式的，所以无法简单优化，对于未加密压缩的大文件，可以考虑优化成多协程下载以提高下载速度）。
 
 ## 引用文档
 
