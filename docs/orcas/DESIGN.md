@@ -226,7 +226,7 @@ type Handler interface {
 ### “奇妙”的设计
 
 `Ref`、`Put`关于负数ID的设计：
-- Ref返回的ID如果有负数，说明在同一批中，找到了相同的数据，以下标反码的方式指出，比如引用了第0个元素，那返回就是`^0`，刚好是负数的最小值，以此类推；而在上传对象信息时，`PID`字段同样可以引用还未生成ID的其他对象，以实现批量创建一批存在父子关系的对象的效果。
+- `Ref`秒传接口返回的ID如果有负数，说明在同一批中，找到了相同的数据，以下标反码的方式指出，比如引用了第0个元素，那返回就是`^0`，刚好是负数的最小值，以此类推；而在`Put`接口上传对象信息时，`PID`字段同样可以引用还未生成ID的其他对象，以实现一次批量创建一批有父子关系的对象的效果。
 
 ## SDK配置
 
@@ -280,8 +280,8 @@ for len(q) > 0 {
 
 	// 上传dirs后得到子目录的ID
 	ids, _ := osi.h.Put(c, bktID, dirs)
-	// 组装成dirElems
-	do something wit `dirElems`
+	// 组装dirElems
+	//deal with `dirElems`
 	// 弹出第一个处理完成的元素，放入子目录元素
 	q = append(q[1:], dirElems...)
 }
@@ -302,21 +302,21 @@ for i, id := range ids {
 	}
 }
 // 成功部分到秒传
-osi.uploadFiles(c, bktID, path, f1, d1, FULL, action|HDR_CRC32)
+osi.uploadFiles(c, bktID, path, f1, d1, FULL, doneAction|HDR_CRC32)
 // 失败部分到普通上传
-osi.uploadFiles(c, bktID, path, f2, d2, OFF, action|HDR_CRC32)
-// 详见：https://github.com/orcastor/orcas/blob/master/sdk/data.go#L273
+osi.uploadFiles(c, bktID, path, f2, d2, OFF, doneAction|HDR_CRC32)
+// 详见：https://github.com/orcastor/orcas/blob/master/sdk/data.go#L274
 ```
 
 文件读取这里还有一个优化是每次会告知下一次调用，上一次已经准备好了哪些数据，下一层不再需要读取和计算了。主要是hdrCRC32、数据的文件类型、CRC32、MD5三部分，这样最差情况也只需要读取文件两次+一个头部。
 ```go
 // PS：需要进行秒传操作，读取完整文件，但是标记HDR_CRC32已经读取过了
-osi.uploadFiles(c, bktID, path, f1, d1, FULL, action|HDR_CRC32)
+osi.uploadFiles(c, bktID, path, f1, d1, FULL, doneAction|HDR_CRC32)
 ```
 
 在读取头部CRC32的同时，如果开启压缩，这里会根据文件类型判断是否命中压缩率较高的文件类型（目前设置的jpg、png、常见压缩格式），而自动取消压缩。（浪费CPU并且压缩效果很差或者可能会负压缩）
 ```go
-// 如果开启智能压缩的，检查文件类型确定是否要压缩
+// 如果开启智能压缩，检查文件类型确定是否要压缩
 if l.cfg.WiseCmpr > 0 {
 	kind, _ := filetype.Match(buf)
 	if CmprBlacklist[kind.MIME.Value] == 0 {
@@ -400,7 +400,7 @@ q := []elem{{id: id, path: path}}
 for len(q) > 0 {
 	o, _, _, _ := osi.h.List(c, bktID, q[0].id, core.ListOptions{
 		Order: "type",
-	})
+	}) // 伪代码，实际还要处理delim，一次获取一批，直到获取不到为止
 
 	for _, o := range o {
 		switch o.Type {
