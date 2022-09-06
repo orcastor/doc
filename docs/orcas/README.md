@@ -73,7 +73,7 @@
   - 支持按集群扩容，规避集群内扩容的数据迁移问题
   - 参考Ceph的PG，TiKV的PD等
 
-## 引用文档
+## 参考文档
 
 - [OpenStack的Swift组件详解](https://www.jb51.net/article/210814.htm)
 - [放弃FastDFS，拥抱MinIO的7大理由](https://zhuanlan.zhihu.com/p/531850954)
