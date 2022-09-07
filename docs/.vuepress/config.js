@@ -3,7 +3,7 @@ module.exports = {
         '/': {
             lang: 'zh-CN',
             title: 'OrcaS',
-            description: '一款开箱即用的轻量级对象文件系统'
+            description: '一款开箱即用的轻量级对象存储'
         },
         /*'/en/': {
             lang: 'en-US', // 将会被设置为 <html> 的 lang 属性
@@ -20,7 +20,7 @@ module.exports = {
             "meta",
             {
                 name: "keywords",
-                content: "orcas,object,storage,opensource",
+                content: "orcas,object,storage,opensource,embeded",
             },
         ],
     ],

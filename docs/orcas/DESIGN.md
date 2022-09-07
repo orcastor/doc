@@ -66,7 +66,27 @@
    </tr>
 </table>
 
-这里我们选择的是父子ID方案，当然也并不限制`name`，也可以在`name`中放置`/`来当对象存储使用。
+这里我们选择的是父子ID方案，当然也可以在`name`中放置`/`来当对象存储或者KV存储使用。
+
+#### 【桶信息】
+
+- 桶ID
+- 桶名称
+- 拥有者
+- 桶类型
+- 配额
+- 使用量，统计所有版本的原始大小
+
+``` go
+type BucketInfo struct {
+	ID    int64  `borm:"id"`    // 桶ID
+	Name  string `borm:"name"`  // 桶名称
+	UID   int64  `borm:"uid"`   // 拥有者
+	Type  int    `borm:"type"`  // 桶类型，0: none, 1: normal ...
+	Quota int64  `borm:"quota"` // 配额
+	Usage int64  `borm:"usage"` // 使用量，统计所有版本的原始大小
+}
+```
 
 #### 【对象信息】
 
@@ -123,14 +143,14 @@ type DataInfo struct {
 }
 ```
 
-PS: 这里的MD5使用的是32位的，按理本可以使用`uint64`存储，以加速匹配时间以及减少存储空间，但是sql driver不支持符号位为1的64位整型数据的读取，所以改为`string`存储。
+PS: 这里的MD5使用的是32位的，按理本可以使用`uint64`存储，以加速匹配时间以及减少存储空间，但是sql driver不支持有符号位的64位整型数据的读取，所以改为`string`存储。
 
 ### 数据设计
 
-数据存储方式和Ceph、Swift以及常见对象存储设计类似，对名称做hash，第一级为hash十六进制字符串的最后三个字符，第二级为hash值，第三级为数据名称，数据名称这里我们设置为`"数据ID-数据块序号SN"`。咱们来分析一下，由于hash的存在，所以即使是同一个数据的多个数据块也不会存储在同一个目录下，三个字母会有4096个组合，也即会均匀分散到四千多个目录里，而第三级的实际名称能在hash发生冲突时解决冲突。
+数据存储方式和Ceph、Swift以及常见对象存储设计类似，对名称做hash，第一级为hash十六进制字符串的最后三个字符，第二级为hash值，第三级为数据名称，数据名称这里我们设置为`数据ID_分块序号SN`。咱们来分析一下，由于hash的存在，所以即使是同一个数据的多个数据块也不会存储在同一个目录下，三个字母会有4096个组合，也即会均匀分散到四千多个目录里，而第三级的实际名称能在hash发生冲突时解决冲突。
 
 ```go
-// path/<文件名hash的最后三个字节>/hash
+// path/<文件名hash的最后三个字节>/hash/<dataID>_<sn>
 func toFilePath(path string, bcktID, dataID int64, sn int) string {
 	fileName := fmt.Sprintf("%d_%d", dataID, sn)
 	hash := fmt.Sprintf("%X", md5.Sum([]byte(fileName)))
@@ -139,6 +159,11 @@ func toFilePath(path string, bcktID, dataID int64, sn int) string {
 ```
 
 其中，`hash[8:24]`是32位MD5十六进制表示的取值部分，`hash[21:24]`是最后三个字符。
+
+举例说明：
+> /tmp/test/27490508603392/14F/B58F53F837AC814F/27490525380709_0
+
+`/tmp/test`为挂载路径，`27490508603392`为桶ID，后面为桶内数据存储路径，`27490525380709`是数据ID，`0`是SN序号，`B58F53F837AC814F`是名称`27490525380709_0`的32位MD5值的是十六进制表示，`14F`是`B58F53F837AC814F`的最后三个字符。
 
 空对象不上传，用固定的ID和信息占位。
 ```go
@@ -207,7 +232,7 @@ type Handler interface {
 	// 用于非文件内容的扫描，只看文件是否存在，大小是否合适
 	FileSize(c Ctx, bktID, dataID int64, sn int) (int64, error)
 
-	// 垃圾回收时有数据没有元数据引用的为脏数据（需要留出窗口时间），有元数据没有数据的为损坏数据
+	// Name不传默认用ID字符串化后的值作为Name
 	Put(c Ctx, bktID int64, o []*ObjectInfo) ([]int64, error)
 	Get(c Ctx, bktID int64, ids []int64) ([]*ObjectInfo, error)
 	List(c Ctx, bktID, pid int64, opt ListOptions) (o []*ObjectInfo, cnt int64, delim string, err error)
@@ -215,6 +240,7 @@ type Handler interface {
 	Rename(c Ctx, bktID, id int64, name string) error
 	MoveTo(c Ctx, bktID, id, pid int64) error
 
+	// 垃圾回收时有数据没有元数据引用的为脏数据（需要留出窗口时间），有元数据没有数据的为损坏数据
 	Recycle(c Ctx, bktID, id int64) error
 	Delete(c Ctx, bktID, id int64) error
 }
@@ -239,14 +265,12 @@ type Config struct {
 	EndecWay uint32 // 加密方式，取值见core.DATA_ENDEC_MASK
 	EndecKey string // 加密KEY，SM4需要固定为16个字符，AES256需要大于16个字符
 	DontSync string // 不同步的文件名通配符（https://pkg.go.dev/path/filepath#Match），用分号分隔
-	//Conflict uint32 // 同名冲突后，0: Merge or Cover（默认） / 1: Throw / 2: Rename / 3: Skip
-	//NameTail string // 重命名尾巴，"-副本" / "{\d}"
-	//ChkPtDir string // 断点续传记录目录，不设置路径默认不开启
-	//BEDecmpr bool   // 后端解压，PS：必须是非加密数据
+	Conflict uint32 // 同名冲突解决方式，0: Merge or Cover（默认） / 1: Throw / 2: Rename / 3: Skip
+	NameTmpl string // 重命名尾巴，"%s的副本"
 }
 ```
 
-PS：别怀疑，我有强迫症，连配置名字都要对齐。最后注释的四条还未实现。
+PS：别怀疑，我有强迫症，连配置名字都要对齐。
 
 ## 上传逻辑
 
@@ -425,7 +449,7 @@ if dataID == 0 {
 	os, _, _, _ := osi.h.List(c, bktID, o.ID, core.ListOptions{
 		Type:  core.OBJ_TYPE_VERSION,
 		Count: 1,
-		Order: "-mtime",
+		Order: "-id",
 	})
 	dataID = os[0].DataID
 }
