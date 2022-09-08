@@ -464,25 +464,28 @@ if len(rename) > 0 {
 	for i := range ids2 {
 		if ids2[i] > 0 {
 			// 创建成功的，记录一下ID
-		} else {
-			// 还是失败，用NameTmpl找有多少个目录，然后往后一个一个尝试
-			_, cnt, _, _ := osi.h.List(c, bktID, rename[i].PID, core.ListOptions{
-				Word: rename[i].Name + "*",
-			})
-			// 假设有 test、test的副本、test的副本2，cnt为2
-			for j := 0; j <= int(cnt/2)+1; j++ {
-				// 先试试个数后面一个，正常顺序查找，最大概率命中的分支
-				if ids[m[i]], err3 = osi.putOne(c, bktID, osi.getRename(o[i], int(cnt)+j)); err3 == nil {
-					break
-				}
-				// 从最前面往后找
-				if ids[m[i]], err3 = osi.putOne(c, bktID, osi.getRename(o[i], j)); err3 == nil {
-					break
-				}
-				// 从cnt个开始往前找
-				if ids[m[i]], err3 = osi.putOne(c, bktID, osi.getRename(o[i], int(cnt)-1-j)); err3 == nil {
-					break
-				}
+			continue
+		}
+		// 还是失败，用NameTmpl找有多少个目录，然后往后一个一个尝试
+		_, cnt, _, _ := osi.h.List(c, bktID, rename[i].PID, core.ListOptions{
+			Word: rename[i].Name + "*",
+		})
+		// 假设有 test、test的副本、test的副本2，cnt为2
+		for j := 0; j <= int(cnt/2)+1; j++ {
+			// 先试试个数后面一个，正常顺序查找，最大概率命中的分支
+			if ids[m[i]], err3 = osi.putOne(c, bktID, 
+				osi.getRename(o[i], int(cnt)+j)); err3 == nil {
+				break
+			}
+			// 从最前面往后找
+			if ids[m[i]], err3 = osi.putOne(c, bktID, 
+				osi.getRename(o[i], j)); err3 == nil {
+				break
+			}
+			// 从cnt个开始往前找
+			if ids[m[i]], err3 = osi.putOne(c, bktID, 
+				osi.getRename(o[i], int(cnt)-1-j)); err3 == nil {
+				break
 			}
 		}
 	}
