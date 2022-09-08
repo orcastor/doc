@@ -68,6 +68,7 @@ module.exports = {
                             children: [
                                 "/orcas/",
                                 "/orcas/DESIGN.md",
+                                "/orcas/RESULT.md",
                                 "/orcas/FAQ.md",
                             ],
                         },
