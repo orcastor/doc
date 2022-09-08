@@ -328,7 +328,7 @@ for i, id := range ids {
 osi.uploadFiles(c, bktID, f1, d1, dp, FULL, doneAction|HDR_CRC32)
 // 失败部分到普通上传
 osi.uploadFiles(c, bktID, f2, d2, dp, OFF, doneAction|HDR_CRC32)
-// 详见：https://github.com/orcastor/orcas/blob/master/sdk/data.go#L274
+// 详见：https://github.com/orcastor/orcas/blob/master/sdk/data.go#L360
 ```
 
 文件读取这里还有一个优化是每次会告知下一次调用，上一次已经准备好了哪些数据，下一层不再需要读取和计算了。主要是hdrCRC32、数据的文件类型、CRC32、MD5三部分，这样最差情况也只需要读取文件两次+一个头部。
