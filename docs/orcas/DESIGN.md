@@ -411,7 +411,25 @@ if l.action&UPLOAD_DATA != 0 {
 }
 ```
 
-关于对象重名冲突，一共有四种模式，合并覆盖、重命名、报错、跳过，其中报错和跳过比较简单，发现有同名文件创建失败以后，前者报错，后者忽略错误，合并覆盖，尝试获取原来的对象ID，如果是文件对象的，再创建一个版本。
+关于对象重名冲突，一共有四种模式，合并覆盖、重命名、报错、跳过，其中报错和跳过比较简单，发现有同名文件创建失败以后，前者报错，后者忽略错误.
+```go
+	switch osi.cfg.Conflict {
+	case MERGE: // Merge or Cover（默认）
+		// ...
+	case RENAME: // Rename
+		// ...
+	case THROW: // Throw
+		for i := range ids {
+			if ids[i] <= 0 {
+				return ids, fmt.Errorf("remote object exists, pid:%d, name:%s", o[i].PID, o[i].Name)
+			}
+		}
+	case SKIP: // Skip
+		break
+	}
+```
+
+合并覆盖，尝试获取原来的对象ID，如果是文件对象的，再创建一个版本。
 ```go
 var vers []*core.ObjectInfo
 for i := range ids {
