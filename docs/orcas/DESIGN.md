@@ -325,16 +325,16 @@ for i, id := range ids {
 	}
 }
 // 成功部分到秒传
-osi.uploadFiles(c, bktID, f1, d1, FULL, doneAction|HDR_CRC32)
+osi.uploadFiles(c, bktID, f1, d1, dp, FULL, doneAction|HDR_CRC32)
 // 失败部分到普通上传
-osi.uploadFiles(c, bktID, f2, d2, OFF, doneAction|HDR_CRC32)
+osi.uploadFiles(c, bktID, f2, d2, dp, OFF, doneAction|HDR_CRC32)
 // 详见：https://github.com/orcastor/orcas/blob/master/sdk/data.go#L274
 ```
 
 文件读取这里还有一个优化是每次会告知下一次调用，上一次已经准备好了哪些数据，下一层不再需要读取和计算了。主要是hdrCRC32、数据的文件类型、CRC32、MD5三部分，这样最差情况也只需要读取文件两次+一个头部。
 ```go
 // PS：需要进行秒传操作，读取完整文件，但是标记HDR_CRC32已经读取过了
-osi.uploadFiles(c, bktID, f1, d1, FULL, doneAction|HDR_CRC32)
+osi.uploadFiles(c, bktID, f1, d1, dp, FULL, doneAction|HDR_CRC32)
 ```
 
 在读取头部CRC32的同时，如果开启压缩，这里会根据文件类型判断是否命中压缩率较高的文件类型（目前设置的jpg、png、常见压缩格式），而自动取消压缩。（浪费CPU并且压缩效果很差或者可能会负压缩）
