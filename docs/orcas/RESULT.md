@@ -14,7 +14,7 @@
 ```go
 var cfg = Config{
 	DataSync: true,
-	RefLevel: FAST,
+	RefLevel: FULL,
 	WiseCmpr: core.DATA_CMPR_ZSTD,
 	DontSync: ".*",
 	WorkersN: 16,
