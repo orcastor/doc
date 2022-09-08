@@ -47,8 +47,6 @@ func TestDownload(t *testing.T) {
 
 		sdk.SetConfig(cfg)
 		id, _ := sdk.Path2ID(c, bktID, core.ROOT_OID, filepath.Base(path))
-		fmt.Println(id)
-		fmt.Println(sdk.ID2Path(c, bktID, id))
 
 		So(sdk.Download(c, bktID, id, mntPath), ShouldBeNil)
 	})
