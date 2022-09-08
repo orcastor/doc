@@ -12,7 +12,7 @@ module.exports = {
         },*/
     },
     title: 'OrcaS',
-    description: 'An out-of-box, light weight object storage',
+    description: 'A lightweight, out-of-box object storage',
     base: "/doc/",
     head: [
         ['link', { rel: 'icon', href: '/favicon.ico' }],
