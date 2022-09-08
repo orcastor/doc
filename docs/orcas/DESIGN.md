@@ -462,6 +462,38 @@ if dataID == core.EmptyDataID {
 }
 ```
 
+## 测试结果
+
+|项|配置|
+|-|-|
+|CPU|2.3 GHz 双核Intel Core i5|
+|内存|8 GB 2133 MHz LPDDR3|
+|读取|USB2.0外挂移动硬盘，西数 2T HDD，exFAT文件系统|
+|写入|PCIE本地 120G SSD盘，apfs文件系统|
+|文件|1W个4K小文件|
+|设置|同步写入，16路并发，开启zstd压缩，秒传`FULL`，其余默认|
+
+|项|结果|
+|-|-|
+|速率|上传9秒，下载3秒|
+|空间|原始文件夹39MB，写入数据23B(*磁盘占用要看文件系统分块情况)、元数据2.1MB|
+
+```shell
+/usr/local/go/bin/go test -run ^TestUpload$ github.com/orcastor/orcas/sdk
+=== RUN   TestUpload
+--- PASS: TestUpload (8.98s)
+PASS
+ok  	github.com/orcastor/orcas/sdk	9.012s
+```
+
+```shell
+/usr/local/go/bin/go test -run ^TestDownload$ github.com/orcastor/orcas/sdk
+=== RUN   TestDownload
+--- PASS: TestDownload (3.00s)
+PASS
+ok  	github.com/orcastor/orcas/sdk	3.013s
+```
+
 ## 参考文档
 
 - [Snowflake 分布式自增ID算法](https://www.oschina.net/p/twitter-snowflake?hmsr=aladdin1e1)
