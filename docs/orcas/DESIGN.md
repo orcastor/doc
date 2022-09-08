@@ -265,6 +265,7 @@ type Config struct {
 	DontSync string // 不同步的文件名通配符（https://pkg.go.dev/path/filepath#Match），用分号分隔
 	Conflict uint32 // 同名冲突解决方式，0: Merge or Cover（默认） / 1: Throw / 2: Rename / 3: Skip
 	NameTmpl string // 重命名尾巴，"%s的副本"
+	WorkersN uint32 // 并发池大小
 }
 ```
 
@@ -324,16 +325,16 @@ for i, id := range ids {
 	}
 }
 // 成功部分到秒传
-osi.uploadFiles(c, bktID, path, f1, d1, FULL, doneAction|HDR_CRC32)
+osi.uploadFiles(c, bktID, f1, d1, FULL, doneAction|HDR_CRC32)
 // 失败部分到普通上传
-osi.uploadFiles(c, bktID, path, f2, d2, OFF, doneAction|HDR_CRC32)
+osi.uploadFiles(c, bktID, f2, d2, OFF, doneAction|HDR_CRC32)
 // 详见：https://github.com/orcastor/orcas/blob/master/sdk/data.go#L274
 ```
 
 文件读取这里还有一个优化是每次会告知下一次调用，上一次已经准备好了哪些数据，下一层不再需要读取和计算了。主要是hdrCRC32、数据的文件类型、CRC32、MD5三部分，这样最差情况也只需要读取文件两次+一个头部。
 ```go
 // PS：需要进行秒传操作，读取完整文件，但是标记HDR_CRC32已经读取过了
-osi.uploadFiles(c, bktID, path, f1, d1, FULL, doneAction|HDR_CRC32)
+osi.uploadFiles(c, bktID, f1, d1, FULL, doneAction|HDR_CRC32)
 ```
 
 在读取头部CRC32的同时，如果开启压缩，这里会根据文件类型判断是否命中压缩率较高的文件类型（目前设置的jpg、png、常见压缩格式），而自动取消压缩。（浪费CPU并且压缩效果很差或者可能会负压缩）
@@ -410,7 +411,65 @@ if l.action&UPLOAD_DATA != 0 {
 }
 ```
 
-关于对象重名冲突部分：目前还未实现。
+关于对象重名冲突，一共有四种模式，合并覆盖、重命名、报错、跳过，其中报错和跳过比较简单，发现有同名文件创建失败以后，前者报错，后者忽略错误，合并覆盖，尝试获取原来的对象ID，如果是文件对象的，再创建一个版本。
+```go
+var vers []*core.ObjectInfo
+for i := range ids {
+	// 如果创建失败
+	if ids[i] <= 0 {
+		// 获取原来的对象ID
+		ids[i], err = osi.Path2ID(c, bktID, o[i].PID, o[i].Name)
+		// 如果是文件，需要新建一个版本，版本更新的逻辑需要jobs来完成
+		if o[i].Type == core.OBJ_TYPE_FILE {
+			vers = append(vers, &core.ObjectInfo{....})
+		}
+	}
+}
+if len(vers) > 0 {
+	osi.h.Put(c, bktID, vers) // 上传新版本
+}
+```
+
+如果是重命名相对来说会复杂一些，会先用给定的模版直接尝试创建一个副本，如果还是报错，会先查看除了本身和副本个数`cnt`，然后会在三个方向上尝试，最差情况会找`cnt`次（也即刚好全部符合我们的查找序列），正常顺序情况下，只会尝试2次，目前的实现参考的是MacOSX的实现，也即序列为`test、test的副本、test的副本2、test的副本3...`，实际测试MacOSX的性能很差，在副本已经存在1万个时，创建一个文件需要几秒，可猜测是简单顺序尝试的。
+```go
+var rename []*core.ObjectInfo
+for i := range ids {
+	// 需要重命名重新创建
+	if ids[i] <= 0 {
+		// 先直接用NameTmpl创建，覆盖大部分场景
+		rename = append(rename, osi.getRename(o[i], 0))
+	}
+}
+// 需要重命名重新创建
+if len(rename) > 0 {
+	ids2, _ := osi.h.Put(c, bktID, rename)
+	for i := range ids2 {
+		if ids2[i] > 0 {
+			// 创建成功的，记录一下ID
+		} else {
+			// 还是失败，用NameTmpl找有多少个目录，然后往后一个一个尝试
+			_, cnt, _, _ := osi.h.List(c, bktID, rename[i].PID, core.ListOptions{
+				Word: rename[i].Name + "*",
+			})
+			// 假设有 test、test的副本、test的副本2，cnt为2
+			for j := 0; j <= int(cnt/2)+1; j++ {
+				// 先试试个数后面一个，正常顺序查找，最大概率命中的分支
+				if ids[m[i]], err3 = osi.putOne(c, bktID, osi.getRename(o[i], int(cnt)+j)); err3 == nil {
+					break
+				}
+				// 从最前面往后找
+				if ids[m[i]], err3 = osi.putOne(c, bktID, osi.getRename(o[i], j)); err3 == nil {
+					break
+				}
+				// 从cnt个开始往前找
+				if ids[m[i]], err3 = osi.putOne(c, bktID, osi.getRename(o[i], int(cnt)-1-j)); err3 == nil {
+					break
+				}
+			}
+		}
+	}
+}
+```
 
 ## 下载逻辑
 
@@ -460,50 +519,6 @@ if dataID == core.EmptyDataID {
 	// 否则获取数据信息
 	d, _ = osi.h.GetDataInfo(c, bktID, dataID)
 }
-```
-
-## 测试结果
-
-|项|配置|
-|-|-|
-|CPU|2.3 GHz 双核Intel Core i5|
-|内存|8 GB 2133 MHz LPDDR3|
-|读取|USB2.0外挂移动硬盘，西数 2T HDD，exFAT文件系统|
-|写入|PCIE本地 120G SSD盘，apfs文件系统|
-|设置|同步写入，16路并发，开启zstd压缩，秒传`FULL`，其余默认|
-
-### 1W个4K小文件
-
-|项|结果|
-|-|-|
-|速率|上传9秒 ≈1111 iter/s，下载3秒 ≈3333 iter/s|
-|空间|原始文件夹39MB，写入数据23B(*磁盘占用要看文件系统分块情况)、元数据2.1MB|
-
-```shell
-/usr/local/go/bin/go test github.com/orcastor/orcas/sdk -v
-=== RUN   TestUpload
---- PASS: TestUpload (8.98s)
-=== RUN   TestDownload
---- PASS: TestDownload (3.00s)
-PASS
-ok  	github.com/orcastor/orcas/sdk	12.013s
-```
-
-### 2个dmg文件（1.07GB + 920.8MB）
-
-|项|结果|
-|-|-|
-|速率|上传20秒 ≈101.88 MB/s，下载12秒 ≈169.81 MB/s|
-|空间|原始文件夹1.99GB，写入后1.8GB|
-
-```shell
-/usr/local/go/bin/go test github.com/orcastor/orcas/sdk -v
-=== RUN   TestUpload
---- PASS: TestUpload (20.20s)
-=== RUN   TestDownload
---- PASS: TestDownload (12.23s)
-PASS
-ok  	github.com/orcastor/orcas/sdk	32.432s
 ```
 
 ## 参考文档
