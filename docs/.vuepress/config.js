@@ -63,7 +63,7 @@ module.exports = {
                 sidebar: {
                     "/orcas/": [
                         {
-                            title: "从0开始设计对象文件系统",
+                            title: "从0开始设计对象存储",
                             collapsable: false, // 可选的, 默认值是 true,
                             children: [
                                 "/orcas/",
