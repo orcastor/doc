@@ -4,8 +4,7 @@
 |-|-|
 |CPU|2.3 GHz 双核Intel Core i5|
 |内存|8 GB 2133 MHz LPDDR3|
-|读取|USB2.0外挂移动硬盘，西数 2T HDD，exFAT文件系统|
-|写入|PCIE本地 120G SSD盘，apfs文件系统|
+|磁盘|PCI-Express本地 120G SSD盘，apfs文件系统|
 |设置|同步写入，16路并发，开启zstd压缩，秒传`FULL`，其余默认|
 
 ## 测试代码
@@ -17,8 +16,6 @@ var cfg = Config{
 	DataSync: true,
 	RefLevel: FAST,
 	WiseCmpr: core.DATA_CMPR_ZSTD,
-	//EndecWay: core.DATA_ENDEC_AES256,
-	//EndecKey: "1234567890abcdef12345678",
 	DontSync: ".*",
 	WorkersN: 16,
 }
@@ -64,18 +61,23 @@ func TestDownload(t *testing.T) {
 
 |项|结果|
 |-|-|
-|速率|上传9秒 ≈1111 iter/s，下载3秒 ≈3333 iter/s|
-|空间|原始文件夹39MB，写入数据23B(*磁盘占用要看文件系统分块情况)、元数据2.1MB|
+|速率|上传4.79秒 ≈2087.68 iter/s，下载3.71秒 ≈2695.42 iter/s|
+|空间|原始文件夹39MB，写入数据23B(*磁盘占用要看文件系统分块情况)、元数据1.1MB|
 
 ```shell
-/usr/local/go/bin/go test github.com/orcastor/orcas/sdk -v
+/usr/local/go/bin/go test github.com/orcastor/orcas/sdk -v=== RUN   TestUpload
 === RUN   TestUpload
---- PASS: TestUpload (8.98s)
+--- PASS: TestUpload (4.79s)
 === RUN   TestDownload
---- PASS: TestDownload (3.00s)
+--- PASS: TestDownload (3.71s)
+=== RUN   TestCheck
+--- PASS: TestCheck (0.90s)
 PASS
-ok  	github.com/orcastor/orcas/sdk	12.013s
+ok  	github.com/orcastor/orcas/sdk	9.481s
 ```
+
+读写改成SATA盘，USB2.0外挂移动硬盘，西数 2T HDD，exFAT文件系统
+> 上传9秒 ≈1111 iter/s，下载3秒 ≈3333 iter/s
 
 ## 大文件
 
@@ -83,15 +85,20 @@ ok  	github.com/orcastor/orcas/sdk	12.013s
 
 |项|结果|
 |-|-|
-|速率|上传20秒 ≈101.88 MB/s，下载12秒 ≈169.81 MB/s|
+|速率|上传9.77秒 ≈208.57 MB/s，下载7.30秒 ≈279.15 MB/s|
 |空间|原始文件夹1.99GB，写入后1.8GB|
 
 ```shell
 /usr/local/go/bin/go test github.com/orcastor/orcas/sdk -v
 === RUN   TestUpload
---- PASS: TestUpload (20.20s)
+--- PASS: TestUpload (9.77s)
 === RUN   TestDownload
---- PASS: TestDownload (12.23s)
+--- PASS: TestDownload (7.30s)
+=== RUN   TestCheck
+--- PASS: TestCheck (5.85s)
 PASS
-ok  	github.com/orcastor/orcas/sdk	32.432s
+ok  	github.com/orcastor/orcas/sdk	22.965s
 ```
+
+读写改成SATA盘，USB2.0外挂移动硬盘，西数 2T HDD，exFAT文件系统
+> 上传20秒 ≈101.88 MB/s，下载12秒 ≈169.81 MB/s
