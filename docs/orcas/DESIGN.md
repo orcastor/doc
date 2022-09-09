@@ -94,8 +94,6 @@ type BucketInfo struct {
 - 访问时间（如果没有，那就是修改时间>创建时间）
 - 对象的类型
 - 数据ID
-- 幂等操作ID
-- 快照版本ID
 
 ``` go
 type ObjectInfo struct {
@@ -176,6 +174,17 @@ func EmptyDataInfo() *DataInfo {
 		Kind: DATA_NORMAL,
 	}
 }
+```
+
+### 目录组织
+
+``` sh
+/tmp/test/27490508603392/14F/B58F53F837AC814F/27490525380709_0
+                                  # 数据文件
+/tmp/test/27490508603392/meta.db  # 桶数据库，对象信息和数据信息表
+/tmp/test/27490508603392/         # 桶目录
+/tmp/test/meta.db                 # 桶信息表、用户信息表
+/tmp/test/                        # 存储挂载目录
 ```
 
 ### ID生成方案设计
