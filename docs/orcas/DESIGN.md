@@ -591,6 +591,5 @@ if dataID == core.EmptyDataID {
 
 ## 参考文档
 
-- [Snowflake 分布式自增ID算法](https://www.oschina.net/p/twitter-snowflake?hmsr=aladdin1e1)
 - [Twitter雪花算法SnowFlake改造: 兼容JS截短位数的53bit分布式ID生成器](https://juejin.cn/post/6844903981886472206)
 - [MAX_SAFE_INTEGER in JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/MAX_SAFE_INTEGER)
