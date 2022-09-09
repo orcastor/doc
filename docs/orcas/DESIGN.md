@@ -170,7 +170,7 @@ const EmptyDataID = 4708888888888
 func EmptyDataInfo() *DataInfo {
 	return &DataInfo{
 		ID:   EmptyDataID,
-		MD5:  "8F00B204E9800998",
+		MD5:  -1081059644736014743,
 		Kind: DATA_NORMAL,
 	}
 }
