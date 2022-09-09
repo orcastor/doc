@@ -64,7 +64,8 @@ func TestDownload(t *testing.T) {
 |空间|原始文件夹39MB，写入数据23B(*磁盘占用要看文件系统分块情况)、元数据1.1MB|
 
 ```sh
-/usr/local/go/bin/go test github.com/orcastor/orcas/sdk -v=== RUN   TestUpload
+/usr/local/go/bin/go test github.com/orcastor/orcas/sdk -v
+=== RUN   TestUpload
 === RUN   TestUpload
 --- PASS: TestUpload (4.29s)
 === RUN   TestDownload
