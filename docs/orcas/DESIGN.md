@@ -16,7 +16,7 @@
 
 ### 关于存储选型
 
-数据部分为什么用自研存储而不是RocksDB？因为LSM类的实现存在写放大问题。而元数据部分用关系型数据库存储因为查询和排序比较方便，也可以改用合适的KV存储，后续可以看场景和性能测试而定。
+数据部分为什么用自研存储而不是`RocksDB`？因为LSM类实现存在写放大问题。而元数据部分用关系型数据库存储因为查询和排序比较方便，也可以改用合适的KV存储，后续可以看场景和性能测试而定。
 
 ### 默认约定
 
@@ -26,7 +26,7 @@
 
 2. 按对象大小分类存储
 
-小对象支持打包存储，多个小文件打包成一个数据包上传；大对象存储分块存储，数据块默认按4MB切块，也即4194304B，读取大对象时，根据数据总大小计算出需要读取多少个块即可，理论上支持无限大的对象存储（前端因为受到浏览器自带的上传下载功能限制，支持大小受限）。
+小对象支持打包存储，多个小文件打包成一个数据包上传；大对象分块存储，数据块默认按4MB切块，也即4194304B，读取大对象时，根据数据总大小计算出需要读取多少个块即可，理论上支持无限大的对象（前端因为受到浏览器自带的上传下载功能限制，支持大小受限）。
 
 3. 数据只追加不修改（WORM， Write-Once-Read-Many）
 
@@ -62,7 +62,7 @@
    </tr>
 </table>
 
-这里我们选择的是父子ID方案，当然也可以在`name`中放置`/`来当对象存储或者KV存储使用。
+这里我们选择的是父子ID方案，当然也可以在`name`中放置`/`来当KV存储使用。
 
 #### 【桶信息】
 
@@ -145,7 +145,7 @@ PS: 这里的MD5使用的是32位的，按理本可以使用`uint64`存储，以
 
 ### 数据设计
 
-数据存储方式和Ceph、Swift以及常见对象存储设计类似，对名称做hash，第一级为hash十六进制字符串的最后三个字符，第二级为hash值，第三级为数据名称，数据名称这里我们设置为`数据ID_分块序号SN`。咱们来分析一下，由于hash的存在，所以即使是同一个数据的多个数据块也不会存储在同一个目录下，三个字母会有4096个组合，也即会均匀分散到四千多个目录里，而第三级的实际名称能在hash发生冲突时解决冲突。
+数据存储方式和`Ceph`、`Swift`以及常见对象存储设计类似，对名称做hash，第一级为hash十六进制字符串的最后三个字符，第二级为hash值，第三级为数据名称，数据名称这里我们设置为`数据ID_分块序号SN`。咱们来分析一下，由于hash的存在，所以即使是同一个数据的多个数据块也不会存储在同一个目录下，三个字母会有4096个组合，也即会均匀分散到四千多个目录里，而第三级的实际名称能在hash发生冲突时解决冲突。单目录下10000个文件索引性能不受影响，文档平均大小在1M（来自某家庭存储产品的实验室数据），单个桶理论能至少存放10TB数据。
 
 ```go
 // path/<文件名hash的最后三个字节>/hash/<dataID>_<sn>
@@ -159,7 +159,9 @@ func toFilePath(path string, bcktID, dataID int64, sn int) string {
 其中，`hash[8:24]`是32位MD5十六进制表示的取值部分，`hash[21:24]`是最后三个字符。
 
 举例说明：
-> /tmp/test/27490508603392/14F/B58F53F837AC814F/27490525380709_0
+``` sh
+/tmp/test/27490508603392/14F/B58F53F837AC814F/27490525380709_0
+```
 
 `/tmp/test`为挂载路径，`27490508603392`为桶ID，后面为桶内数据存储路径，`27490525380709`是数据ID，`0`是SN序号，`B58F53F837AC814F`是名称`27490525380709_0`的32位MD5值的是十六进制表示，`14F`是`B58F53F837AC814F`的最后三个字符。
 
@@ -183,8 +185,8 @@ func EmptyDataInfo() *DataInfo {
 - 没有限制ID的生成，不传ID参数默认由服务端生成新的并返回，可以主动生成后传入，和MongoDB类似
 - 生成的ID能够随着时间推移，单调递增
 
-并没有使用数据库主键的方案，这有几个方面的考量，一个是后续扩展为多节点时，用额外的ID生成器便于服务迁移和无缝切换为集群版本；一个是能够自带时间维度的信息。
-这里参考MongoDB的对象ID的设计，前半部分是时间戳，后面是实例号和序号，正好和snowflake雪花❄️算法也接近。目前设计的是前40位存储秒级时间戳，中间4位存储实例号（16个实例，但是可多个节点复用），最后20位存储序列号（一秒单“实例”内分配不超过100万个）。
+并没有使用数据库主键的方案，这有几个方面的考量，一个是后续便于无缝切换为集群版本，多DB存储时不会产生主键冲突；一个是能够自带时间维度的信息。
+这里参考`MongoDB`的对象ID的设计，前半部分是时间戳，后面是实例号和序号，正好和`Cassandra`的snowflake雪花❄️算法也接近。目前设计的是前40位存储秒级时间戳，中间4位存储实例号（16个实例，但是可多个节点复用），最后20位存储序列号（一秒单“实例”内分配不超过100万个）。
 
 基本思路是，用Redis(多节点）或者本地内存缓存[ecache](https://github.com/orca-zhang/ecache)（单机）存储每秒每实例的序列号，如果Redis请求发生故障，序列号部分降级为随机数，具体实现见[orca-zhang/idgen](https://github.com/orca-zhang/idgen)
 
@@ -192,7 +194,7 @@ func EmptyDataInfo() *DataInfo {
 
 - 批量写入对象信息，同时可以带部分对象的秒传/秒传预筛选
 - 读取对象信息
-- 读写数据、随机读取数据的一部分（在线播放和在线预览等）
+- 读写数据、随机读取数据的一部分（支持在线播放和在线预览等）
 - 列举对象信息：无限加载模式，支持按对象名、对象类型过滤，支持对象名称、大小、时间排序
 ```go
 type ListOptions struct {
@@ -310,6 +312,8 @@ for len(q) > 0 {
 }
 ```
 
+#### 秒传
+
 文件上传涉及到秒传的部分用到了分治法，由于秒传有三个级别，预秒传得到的结果是秒传或者普通上传，秒传得到的结果是只传对象信息或普通上传，普通上传是上传数据、上传数据信息、上传对象信息。所以设计成了配置复用状态机（同样三个状态，但是语义不同）的形式，预秒传得到的结果分两部分迁移到秒传或者普通上传，秒传失败的结果迁移到普通上传。最不理想情况下，最多递归嵌套三层，没有爆栈风险，也即预秒传失败->秒传失败->普通上传。
 ```go	// 预秒传部分代码
 ids, _ := osi.h.Ref(c, bktID, d)
@@ -336,6 +340,8 @@ osi.uploadFiles(c, bktID, f2, d2, dp, OFF, doneAction|HDR_CRC32)
 // PS：需要进行秒传操作，读取完整文件，但是标记HDR_CRC32已经读取过了
 osi.uploadFiles(c, bktID, f1, d1, dp, FULL, doneAction|HDR_CRC32)
 ```
+
+#### 压缩
 
 在读取头部CRC32的同时，如果开启压缩，这里会根据文件类型判断是否命中压缩率较高的文件类型（目前设置的jpg、png、常见压缩格式），而自动取消压缩。（浪费CPU并且压缩效果很差或者可能会负压缩）
 ```go
@@ -371,24 +377,6 @@ if l.d.OrigSize < PKG_SIZE {
 }
 ```
 
-对于小文件来说，还有一个打包上传的优化逻辑，批量上传文件时，先按文件大小进行排序，如果打包还有足够的空间并且个数没有超过，就放置到打包里，上传后，数据信息记录的是打包的ID和偏移位置。
-```go
-func (dp *dataPkger) Push(c core.Ctx, h core.Handler, 
-	bktID int64, b []byte, d *core.DataInfo) (bool, error) {
-	offset := dp.buf.Len()
-	if offset+len(b) > PKG_SIZE || len(dp.infos) >= int(dp.thres) || len(b) >= PKG_SIZE {
-		return false, dp.Flush(c, h, bktID)
-	}
-	// 填充内容
-	dp.buf.Write(b)
-	// 记录偏移
-	d.PkgOffset = offset
-	// 记录下来要设置打包数据的数据信息
-	dp.infos = append(dp.infos, d)
-	return true, nil
-}
-```
-
 如果配置中开启了加密压缩，先压缩后加密（最终数据的尺寸更小，占用空间更少）即可。
 ```go
 // 上传数据
@@ -410,6 +398,28 @@ if l.action&UPLOAD_DATA != 0 {
 	// 上传encodedBuf...
 }
 ```
+
+### 打包
+
+对于小文件来说，还有一个打包上传的优化逻辑，批量上传文件时，先按文件大小进行排序，如果打包还有足够的空间并且个数没有超过，就放置到打包里，上传后，数据信息记录的是打包的ID和偏移位置。
+```go
+func (dp *dataPkger) Push(c core.Ctx, h core.Handler, 
+	bktID int64, b []byte, d *core.DataInfo) (bool, error) {
+	offset := dp.buf.Len()
+	if offset+len(b) > PKG_SIZE || len(dp.infos) >= int(dp.thres) || len(b) >= PKG_SIZE {
+		return false, dp.Flush(c, h, bktID)
+	}
+	// 填充内容
+	dp.buf.Write(b)
+	// 记录偏移
+	d.PkgOffset = offset
+	// 记录下来要设置打包数据的数据信息
+	dp.infos = append(dp.infos, d)
+	return true, nil
+}
+```
+
+### 命名冲突
 
 关于对象重名冲突，一共有四种模式，合并覆盖、重命名、报错、跳过，其中报错和跳过比较简单，发现有同名文件创建失败以后，前者报错，后者忽略错误.
 ```go
@@ -473,18 +483,18 @@ if len(rename) > 0 {
 		// 假设有 test、test的副本、test的副本2，cnt为2
 		for j := 0; j <= int(cnt/2)+1; j++ {
 			// 先试试个数后面一个，正常顺序查找，最大概率命中的分支
-			if ids[m[i]], err3 = osi.putOne(c, bktID, 
-				osi.getRename(o[i], int(cnt)+j)); err3 == nil {
+			if ids[m[i]], err = osi.putOne(c, bktID, 
+				osi.getRename(o[i], int(cnt)+j)); err == nil {
 				break
 			}
 			// 从最前面往后找
-			if ids[m[i]], err3 = osi.putOne(c, bktID, 
-				osi.getRename(o[i], j)); err3 == nil {
+			if ids[m[i]], err = osi.putOne(c, bktID, 
+				osi.getRename(o[i], j)); err == nil {
 				break
 			}
 			// 从cnt个开始往前找
-			if ids[m[i]], err3 = osi.putOne(c, bktID, 
-				osi.getRename(o[i], int(cnt)-1-j)); err3 == nil {
+			if ids[m[i]], err = osi.putOne(c, bktID, 
+				osi.getRename(o[i], int(cnt)-1-j)); err == nil {
 				break
 			}
 		}
@@ -504,8 +514,8 @@ for len(q) > 0 {
 		Order: "type",
 	}) // 伪代码，实际还要处理delim，一次获取一批，直到获取不到为止
 
-	for _, o := range o {
-		switch o.Type {
+	for _, x := range o {
+		switch x.Type {
 		case core.OBJ_TYPE_DIR:
 			// 下载目录
 		case core.OBJ_TYPE_FILE:
