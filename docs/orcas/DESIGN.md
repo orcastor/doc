@@ -126,7 +126,7 @@ type DataInfo struct {
 	OrigSize int64  `borm:"o_size"`    // 数据的原始大小
 	HdrCRC32 uint32 `borm:"hdr_crc32"` // 头部100KB的CRC32校验值
 	CRC32    uint32 `borm:"crc32"`     // 整个数据的CRC32校验值（最原始数据）
-	MD5      string `borm:"md5"`       // 整个数据的MD5值（最原始数据）
+	MD5      int64  `borm:"md5"`       // 整个数据的MD5值（最原始数据）
 
 	Checksum uint32 `borm:"checksum"` // 整个数据的CRC32校验值（最终数据，用于一致性审计）
 	Kind     uint32 `borm:"kind"`     // 数据状态，正常、损坏、加密、压缩、类型（用于预览等）
@@ -137,7 +137,7 @@ type DataInfo struct {
 }
 ```
 
-PS: 这里的MD5使用的是32位的，按理本可以使用`uint64`存储，以加速匹配时间以及减少存储空间，但是sql driver不支持有符号位的64位整型数据的读取，所以改为`string`存储。
+PS: 这里的MD5使用的是32位的，刚好可以使用`int64`存储，以加速匹配时间以及减少存储空间。
 
 元数据部分就是简单的CRUD，这里用了[borm](https://github.com/orca-zhang/borm/tree/sqlite)的`sqlite`分支。
 
@@ -296,6 +296,36 @@ PS：别怀疑，我有强迫症，连配置名字都要对齐。
 ### 秒传的实现逻辑
 
 如果两个数据的哈希值和长度完全相同，那我们认为他们是完全等同的，那么对象可以使用相同的数据信息（同样的数据ID），为了防止引用过程中可能被同时删除的问题，我们引入一个相对较长的时间窗口即可，需要同时提供MD5和CRC32，是因为存在哈希冲突和漏洞问题。MD5算法选择32位的来减少空间使用，提高匹配效率，虽然这样会增加冲突概率，但是同时会有CRC32存在防止冲突。由于是批量完成的，这里我们用到了小的临时表和元数据表做JOIN的方式实现。
+
+```go
+// 创建临时表
+db.Exec(`CREATE TEMPORARY TABLE ` + tbl + ` (o_size BIGINT NOT NULL,
+	hdr_crc32 UNSIGNED BIG INT NOT NULL,
+	crc32 UNSIGNED BIG INT NOT NULL,
+	md5 BIGINT NOT NULL
+)`)
+// 把待查询数据放到临时表
+if _, err = b.Table(db, tbl, c).Insert(&d,
+		b.Fields("o_size", "hdr_crc32", "crc32", "md5")); err != nil {
+	return nil, err
+}
+var refs []struct {
+	ID       int64  `borm:"max(a.id)"`
+	OrigSize int64  `borm:"b.o_size"`
+	HdrCRC32 uint32 `borm:"b.hdr_crc32"`
+	CRC32    uint32 `borm:"b.crc32"`
+	MD5      int64  `borm:"b.md5"`
+}
+// 联表查询
+if _, err = b.Table(db, `data a, `+tbl+` b`, c).Select(&refs,
+	b.Join(`on a.o_size=b.o_size and a.hdr_crc32=b.hdr_crc32 and 
+			(b.crc32=0 or b.md5=0 or (a.crc32=b.crc32 and a.md5=b.md5))`),
+	b.GroupBy("b.o_size", "b.hdr_crc32", "b.crc32", "b.md5")); err != nil {
+	return nil, err
+}
+// 删除临时表
+db.Exec(`DROP TABLE ` + tbl)
+```
 
 ### 核心逻辑描述
 
