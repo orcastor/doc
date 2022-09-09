@@ -121,19 +121,16 @@ type ObjectInfo struct {
 
 ``` go
 type DataInfo struct {
-	ID       int64  `borm:"id"`        // 数据ID（idgen随机生成的id）
-	Size     int64  `borm:"size"`      // 数据的大小
-	OrigSize int64  `borm:"o_size"`    // 数据的原始大小
-	HdrCRC32 uint32 `borm:"hdr_crc32"` // 头部100KB的CRC32校验值
-	CRC32    uint32 `borm:"crc32"`     // 整个数据的CRC32校验值（最原始数据）
-	MD5      int64  `borm:"md5"`       // 整个数据的MD5值（最原始数据）
-
-	Checksum uint32 `borm:"checksum"` // 整个数据的CRC32校验值（最终数据，用于一致性审计）
-	Kind     uint32 `borm:"kind"`     // 数据状态，正常、损坏、加密、压缩、类型（用于预览等）
-
-	// PkgID不为0说明是打包数据
-	PkgID     int64 `borm:"pkg_id"`  // 打包数据的ID（也是idgen生成的id）
-	PkgOffset int   `borm:"pkg_off"` // 打包数据的偏移位置
+	ID       int64  `borm:"id"`      // 数据ID（idgen随机生成的id）
+	Size     int64  `borm:"size"`    // 数据的大小
+	OrigSize int64  `borm:"o_size"`  // 数据的原始大小
+	HdrCRC32 uint32 `borm:"h_crc32"` // 头部100KB的CRC32校验值
+	CRC32    uint32 `borm:"crc32"`   // 整个数据的CRC32校验值（最原始数据）
+	MD5      int64  `borm:"md5"`     // 整个数据的MD5值（最原始数据）
+	Cksum    uint32 `borm:"cksum"`   // 整个数据的CRC32校验值（最终数据，用于一致性审计）
+	Kind     uint32 `borm:"kind"`    // 数据状态，正常、损坏、加密、压缩、类型（用于预览等）
+	PkgID    int64  `borm:"pkg_id"`  // 打包数据的ID（也是idgen生成的id）
+	PkgOff   int    `borm:"pkg_off"` // 打包数据的偏移位置
 }
 ```
 
@@ -300,27 +297,27 @@ PS：别怀疑，我有强迫症，连配置名字都要对齐。
 ```go
 // 创建临时表
 db.Exec(`CREATE TEMPORARY TABLE ` + tbl + ` (o_size BIGINT NOT NULL,
-	hdr_crc32 UNSIGNED BIG INT NOT NULL,
+	h_crc32 UNSIGNED BIG INT NOT NULL,
 	crc32 UNSIGNED BIG INT NOT NULL,
 	md5 BIGINT NOT NULL
 )`)
 // 把待查询数据放到临时表
 if _, err = b.Table(db, tbl, c).Insert(&d,
-		b.Fields("o_size", "hdr_crc32", "crc32", "md5")); err != nil {
+		b.Fields("o_size", "h_crc32", "crc32", "md5")); err != nil {
 	return nil, err
 }
 var refs []struct {
 	ID       int64  `borm:"max(a.id)"`
 	OrigSize int64  `borm:"b.o_size"`
-	HdrCRC32 uint32 `borm:"b.hdr_crc32"`
+	HdrCRC32 uint32 `borm:"b.h_crc32"`
 	CRC32    uint32 `borm:"b.crc32"`
 	MD5      int64  `borm:"b.md5"`
 }
 // 联表查询
 if _, err = b.Table(db, `data a, `+tbl+` b`, c).Select(&refs,
-	b.Join(`on a.o_size=b.o_size and a.hdr_crc32=b.hdr_crc32 and 
+	b.Join(`on a.o_size=b.o_size and a.h_crc32=b.h_crc32 and 
 			(b.crc32=0 or b.md5=0 or (a.crc32=b.crc32 and a.md5=b.md5))`),
-	b.GroupBy("b.o_size", "b.hdr_crc32", "b.crc32", "b.md5")); err != nil {
+	b.GroupBy("b.o_size", "b.h_crc32", "b.crc32", "b.md5")); err != nil {
 	return nil, err
 }
 // 删除临时表
@@ -445,14 +442,14 @@ if l.action&UPLOAD_DATA != 0 {
 ```go
 func (dp *dataPkger) Push(c core.Ctx, h core.Handler, 
 	bktID int64, b []byte, d *core.DataInfo) (bool, error) {
-	offset := dp.buf.Len()
-	if offset+len(b) > PKG_SIZE || len(dp.infos) >= int(dp.thres) || len(b) >= PKG_SIZE {
+	off := dp.buf.Len()
+	if off+len(b) > PKG_SIZE || len(dp.infos) >= int(dp.thres) || len(b) >= PKG_SIZE {
 		return false, dp.Flush(c, h, bktID)
 	}
 	// 填充内容
 	dp.buf.Write(b)
 	// 记录偏移
-	d.PkgOffset = offset
+	d.PkgOff = off
 	// 记录下来要设置打包数据的数据信息
 	dp.infos = append(dp.infos, d)
 	return true, nil
