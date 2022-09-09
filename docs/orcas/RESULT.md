@@ -66,7 +66,6 @@ func TestDownload(t *testing.T) {
 ```sh
 /usr/local/go/bin/go test github.com/orcastor/orcas/sdk -v
 === RUN   TestUpload
-=== RUN   TestUpload
 --- PASS: TestUpload (4.29s)
 === RUN   TestDownload
 --- PASS: TestDownload (3.04s)
