@@ -267,7 +267,7 @@ type Config struct {
 	DontSync string // 不同步的文件名通配符（https://pkg.go.dev/path/filepath#Match），用分号分隔
 	Conflict uint32 // 同名冲突解决方式，0: Merge or Cover（默认） / 1: Throw / 2: Rename / 3: Skip
 	NameTmpl string // 重命名尾巴，"%s的副本"
-	WorkersN uint32 // 并发池大小
+	WorkersN uint32 // 并发池大小，不小于16
 }
 ```
 
