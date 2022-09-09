@@ -195,9 +195,10 @@ func EmptyDataInfo() *DataInfo {
 - 生成的ID能够随着时间推移，单调递增
 
 并没有使用数据库主键的方案，这有几个方面的考量，一个是后续便于无缝切换为集群版本，多DB存储时不会产生主键冲突；一个是能够自带时间维度的信息。
-这里参考`MongoDB`的对象ID的设计，前半部分是时间戳，后面是实例号和序号，正好和`Cassandra`的snowflake雪花❄️算法也接近。目前设计的是前40位存储秒级时间戳，中间4位存储实例号（16个实例，但是可多个节点复用），最后20位存储序列号（一秒单“实例”内分配不超过100万个）。
+这里参考`MongoDB`的对象ID的设计，前半部分是时间戳，后面是实例号和序号，正好和`Cassandra`的snowflake雪花❄️算法也接近。目前设计的是前42位存储秒级时间戳，中间4位存储实例号（可多个节点复用，最多可部署16个独立的发号器），最后20位存储序列号（单“实例”内每秒分配不超过13万个）。
 
 基本思路是，用Redis(多节点）或者本地内存缓存[ecache](https://github.com/orca-zhang/ecache)（单机）存储每秒每实例的序列号，如果Redis请求发生故障，序列号部分降级为随机数，具体实现见[orca-zhang/idgen](https://github.com/orca-zhang/idgen)
+由于JavaScript最大可表示的安全数字是 2^53^ – 1，所以需要考虑到精度安全问题，目前`idgen`能够保证到`2090-09-27 13:14:06`精度不丢失。
 
 ## 接口设计
 
@@ -563,3 +564,5 @@ if dataID == core.EmptyDataID {
 ## 参考文档
 
 - [Snowflake 分布式自增ID算法](https://www.oschina.net/p/twitter-snowflake?hmsr=aladdin1e1)
+- [Twitter雪花算法SnowFlake改造: 兼容JS截短位数的53bit分布式ID生成器](https://juejin.cn/post/6844903981886472206)
+- [MAX_SAFE_INTEGER in JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/MAX_SAFE_INTEGER)
