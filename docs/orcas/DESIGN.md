@@ -153,12 +153,15 @@ func toFilePath(path string, bcktID, dataID int64, sn int) string {
 
 其中，`hash[8:24]`是32位MD5十六进制表示的取值部分，`hash[21:24]`是最后三个字符。
 
-举例说明：
+#### 举例说明
+
 ``` sh
 /tmp/test/27490508603392/14F/B58F53F837AC814F/27490525380709_0
 ```
 
 `/tmp/test`为挂载路径，`27490508603392`为桶ID，后面为桶内数据存储路径，`27490525380709`是数据ID，`0`是SN序号，`B58F53F837AC814F`是名称`27490525380709_0`的32位MD5值的是十六进制表示，`14F`是`B58F53F837AC814F`的最后三个字符。
+
+#### 空对象
 
 空对象不上传，用固定的ID和信息占位。
 ```go
@@ -173,7 +176,36 @@ func EmptyDataInfo() *DataInfo {
 }
 ```
 
-### 目录组织
+### 异步写入
+
+这里用了[ecache](https://github.com/orca-zhang/ecache)实现了写缓冲队列，在淘汰、覆盖、删除的时候触发刷新磁盘检查，并且每1秒也会强制遍历刷盘，目前来看，优势不是特别明显，需要后续调优。
+```go
+const interval = time.Second
+
+var Q = ecache.NewLRUCache(16, 1024, interval)
+
+func init() {
+	Q.Inspect(func(action int, key string, iface *interface{}, bytes []byte, status int) {
+		// 淘汰、覆盖、删除
+		if (action == ecache.PUT && status <= 0) || (action == ecache.DEL && status == 1) {
+			(*iface).(*AsyncHandle).Close()
+		}
+	})
+
+	go func() {
+		// manually evict expired items
+		for {
+			Q.Walk(func(key string, iface *interface{}, bytes []byte, expireAt int64) bool {
+				// 遍历过期的item，并且清理
+				return true
+			})
+			time.Sleep(interval)
+		}
+	}()
+}
+```
+
+#### 目录组织
 
 ``` sh
 /tmp/test/27490508603392/14F/B58F53F837AC814F/27490525380709_0
@@ -224,6 +256,8 @@ type Handler interface {
 	Close()
 
 	SetOptions(opt Options)
+	// 设置自定义的存储适配器
+	SetAdapter(ma MetadataAdapter, da DataAdapter)
 
 	// 只有文件长度、HdrCRC32是预Ref，如果成功返回新DataID，失败返回0
 	// 有文件长度、CRC32、MD5，成功返回引用的DataID，失败返回0，客户端发现DataID有变化，说明不需要上传数据
@@ -237,8 +271,6 @@ type Handler interface {
 	PutDataInfo(c Ctx, bktID int64, d []*DataInfo) ([]int64, error)
 	// 获取数据信息
 	GetDataInfo(c Ctx, bktID, id int64) (*DataInfo, error)
-	// 用于非文件内容的扫描，只看文件是否存在，大小是否合适
-	FileSize(c Ctx, bktID, dataID int64, sn int) (int64, error)
 
 	// Name不传默认用ID字符串化后的值作为Name
 	Put(c Ctx, bktID int64, o []*ObjectInfo) ([]int64, error)
@@ -373,7 +405,7 @@ osi.uploadFiles(c, bktID, f2, d2, dp, OFF, doneAction|HDR_CRC32)
 // 详见：https://github.com/orcastor/orcas/blob/master/sdk/data.go#L360
 ```
 
-文件读取这里还有一个优化是每次会告知下一次调用，上一次已经准备好了哪些数据，下一层不再需要读取和计算了。主要是hdrCRC32、数据的文件类型、CRC32、MD5三部分，这样最差情况也只需要读取文件两次+一个头部。
+文件读取这里还有一个优化是每次会告知下一次调用，上一次已经准备好了哪些数据，下一层不再需要读取和计算了。主要是hdrCRC32+文件类型、CRC32、MD5三部分，这样最差情况也只需要读取文件两次+一个头部。
 ```go
 // PS：需要进行秒传操作，读取完整文件，但是标记HDR_CRC32已经读取过了
 osi.uploadFiles(c, bktID, f1, d1, dp, FULL, doneAction|HDR_CRC32)
