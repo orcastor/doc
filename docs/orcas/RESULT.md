@@ -60,19 +60,19 @@ func TestDownload(t *testing.T) {
 
 |项|结果|
 |-|-|
-|速率|上传4.29秒 ≈2331.00 pcs/s，下载3.04秒 ≈3289.47 pcs/s|
-|空间|原始文件夹39MB，写入数据23B(*磁盘占用要看文件系统分块情况)、元数据1.1MB|
+|速率|上传3.94秒 ≈2538.07 pcs/s，下载2.78秒 ≈3597.12 pcs/s|
+|空间|原始文件夹39MB，写入数据23B(*磁盘占用要看文件系统分块情况)、元数据996KB|
 
 ```sh
 /usr/local/go/bin/go test github.com/orcastor/orcas/sdk -v
 === RUN   TestUpload
---- PASS: TestUpload (4.29s)
+--- PASS: TestUpload (3.94s)
 === RUN   TestDownload
---- PASS: TestDownload (3.04s)
+--- PASS: TestDownload (2.78s)
 === RUN   TestCheck
---- PASS: TestCheck (1.57s)
+--- PASS: TestCheck (1.29s)
 PASS
-ok  	github.com/orcastor/orcas/sdk	8.983s
+ok  	github.com/orcastor/orcas/sdk	8.102s
 ```
 
 读写改成USB2.0外挂移动硬盘，西数 2T HDD，exFAT文件系统
