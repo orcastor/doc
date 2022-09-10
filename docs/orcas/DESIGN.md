@@ -101,7 +101,7 @@ type ObjectInfo struct {
 	PID    int64  `borm:"pid"`    // 父对象ID
 	MTime  int64  `borm:"mtime"`  // 更新时间，秒级时间戳
 	DataID int64  `borm:"did"`    // 数据ID，如果为0，说明没有数据（新创建的文件，DataID就是对象ID，作为对象的首版本数据）
-	Type   int    `borm:"type"`   // 对象类型，0: malformed, 1: dir, 2: file, 3: version, 4: preview(thumb/m3u8/pdf)
+	Type   int    `borm:"type"`   // 对象类型，-1: malformed, 0: none, 1: dir, 2: file, 3: version, 4: preview(thumb/m3u8/pdf)
 	Name   string `borm:"name"`   // 对象名称
 	Size   int64  `borm:"size"`   // 对象的大小，目录的大小是子对象数，文件的大小是最新版本的字节数
 	Ext    string `borm:"ext"`    // 对象的扩展信息
@@ -232,12 +232,6 @@ func init() {
 /tmp/test/                        # 存储挂载目录
 ```
 
-#### TODO
-
-单个大文件可以优化为双缓冲或者并发上传下载，单个小文件上传可以考虑优化为先写到WAL文件，由服务端打包。
-
-目前第一版涉及的场景只有一次性的写入和读取，实际场景会有热点数据的访问等，需要考虑缓存文件句柄优化频繁读写。
-
 ### 发号器方案设计
 
 对于ID生成使用的发号器的大致需求：
@@ -262,7 +256,7 @@ func init() {
 type ListOptions struct {
 	Word  string // 过滤词，支持通配符*和?
 	Delim string // 分隔符，每次请求后返回，原样回传即可
-	Type  int    // 对象类型，0: 不过滤(default), 1: dir, 2: file, 3: version, 4: preview(thumb/m3u8/pdf)
+	Type  int    // 对象类型，-1: malformed, 0: 不过滤(default), 1: dir, 2: file, 3: version, 4: preview(thumb/m3u8/pdf)
 	Count int    // 查询个数
 	Order string // 排序方式，id/mtime/name/size/type 前缀 +: 升序（默认） -: 降序
 	Brief int    // 显示更少内容(只在网络传输层，节省流量时有效)，0: FULL(default), 1: without EXT, 2:only ID
@@ -311,7 +305,7 @@ type Handler interface {
 这套接口可以说是整个系统的灵魂所在，未来网络层、多副本、多节点、多集群等都会在这套接口上进行扩展和实现（有可能会有改动和调整）。
 - `OrcaS`并没有使用轻客户端、重服务端的方式，而是使用sdk的方式，分摊部分计算和逻辑到客户端完成，从输入端就开始，而不是像平常一样到服务端处理，这样也便于在接口层面做到端到端的统一，对于sdk来说，不需要关心`Handler`是来自哪一层，包括了那些特性，对sdk来说它们看上去都是一样的。在客户端实现打包和组装、加解密和解压缩逻辑，本地的实现是数据直接写入存储；远端的实现是数据通过rpc传输，调用方无法感觉到差别。
 
-### “奇妙”的设计
+### “特别”的设计
 
 `Ref`、`Put`关于负数ID的设计：
 - `Ref`秒传接口返回的ID如果有负数，说明在同一批中，找到了相同的数据，以下标反码的方式指出，比如引用了第0个元素，那返回就是`^0`，刚好是负数的最小值，以此类推；而在`Put`接口上传对象信息时，`PID`字段同样可以引用还未生成ID的其他对象，以实现一次批量创建一批有父子关系的对象的效果。
@@ -377,10 +371,6 @@ if _, err = b.Table(db, `data a, `+tbl+` b`, c).Select(&refs,
 // 删除临时表
 db.Exec(`DROP TABLE ` + tbl)
 ```
-
-#### TODO
-
-为了减少网络请求，可以考虑在服务端和客户端引入双HASH布隆过滤器。
 
 ### 核心逻辑描述
 
