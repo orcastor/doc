@@ -30,7 +30,7 @@
 
 3. 数据只追加不修改（WORM， Write-Once-Read-Many）
 
-这可以简化强一致问题，不再需要引入NRW quorum算法等，不再需要读取多个副本选择更新版本，只需要读取元数据中的最新版本即可，后续实现多副本版可展开讨论。
+这可以简化强一致问题，不再需要引入NRW quorum等算法，不再需要读取多个副本选择更新版本，只需要读取元数据中的最新版本即可，后续实现多副本版可展开讨论。
 
 4. 数据引用/秒传（对象级重复数据删除）
 
@@ -38,7 +38,7 @@
 
 5. 支持常见压缩和加密方法
 
-压缩支持snappy、zstd、gzip等。加密支持国密SM4-CBC-PKCS7Padding、AES-256-GCM等，保障数据私有安全，拥有正确密钥的设备才能在设备端访问数据（全链路）。因为`OrcaS`设计的是重客户端模式，所以数据压缩加密都是在设备端完成，也就意味着可以任意选择合适的压缩加密方式。
+压缩支持snappy、zstd、gzip等、加密支持国密SM4-CBC-PKCS7Padding、AES-256-GCM等，保障数据安全，拥有正确密钥的设备才能在设备端访问数据（全链路）。因为`OrcaS`设计的是重客户端模式，所以数据压缩加密在设备端完成，也就意味着可以任意选择合适的压缩加密方式。
 
 ### 元数据设计
 
@@ -101,8 +101,7 @@ type ObjectInfo struct {
 	PID    int64  `borm:"pid"`    // 父对象ID
 	MTime  int64  `borm:"mtime"`  // 更新时间，秒级时间戳
 	DataID int64  `borm:"did"`    // 数据ID，如果为0，说明没有数据（新创建的文件，DataID就是对象ID，作为对象的首版本数据）
-	Type   int    `borm:"type"`   // 对象类型，0: none, 1: dir, 2: file, 3: version, 4: preview(thumb/m3u8/pdf)
-	Status int    `borm:"status"` // 对象状态，0: none, 1: normal, 1: deleted, 2: recycle(to be deleted), 3: malformed
+	Type   int    `borm:"type"`   // 对象类型，0: malformed, 1: dir, 2: file, 3: version, 4: preview(thumb/m3u8/pdf)
 	Name   string `borm:"name"`   // 对象名称
 	Size   int64  `borm:"size"`   // 对象的大小，目录的大小是子对象数，文件的大小是最新版本的字节数
 	Ext    string `borm:"ext"`    // 对象的扩展信息
