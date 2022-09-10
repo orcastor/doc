@@ -128,7 +128,7 @@ type DataInfo struct {
 	Cksum     uint32 `borm:"cksum"`   // 整个数据的CRC32校验值（最终数据，用于一致性审计）
 	Kind      uint32 `borm:"kind"`    // 数据状态，正常、损坏、加密、压缩、类型（用于预览等）
 	PkgID     int64  `borm:"pkg_id"`  // 打包数据的ID（也是idgen生成的id）
-	PkgOffset int    `borm:"pkg_off"` // 打包数据的偏移位置
+	PkgOffset uint32 `borm:"pkg_off"` // 打包数据的偏移位置
 }
 ```
 
