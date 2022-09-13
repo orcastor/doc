@@ -6,7 +6,7 @@
 |-|-|
 |CPU|2.3 GHz 双核Intel Core i5|
 |内存|8 GB 2133 MHz LPDDR3|
-|磁盘|PCI-Express本地 120G SSD盘，apfs文件系统|
+|磁盘|本地120G SSD盘，PCIe，apfs文件系统|
 |设置|同步写入，16路并发，开启zstd压缩，秒传级别`FULL`，其余默认|
 
 ## 测试代码
