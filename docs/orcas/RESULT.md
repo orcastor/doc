@@ -29,7 +29,7 @@ var cfg = Config{
 func TestUpload(t *testing.T) {
 	Convey("upload dir", t, func() {
 		c := context.TODO()
-		sdk := New(core.NewRWHandler())
+		sdk := New(core.NewLocalHandler())
 		defer sdk.Close()
 
 		sdk.SetConfig(cfg)
@@ -44,7 +44,7 @@ func TestUpload(t *testing.T) {
 func TestDownload(t *testing.T) {
 	Convey("download dir", t, func() {
 		c := context.TODO()
-		sdk := New(core.NewRWHandler())
+		sdk := New(core.NewLocalHandler())
 		defer sdk.Close()
 
 		sdk.SetConfig(cfg)

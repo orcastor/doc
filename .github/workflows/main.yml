@@ -1,4 +1,4 @@
-name: gocache
+name: orcas-doc
 on:
   push:
     branches:
