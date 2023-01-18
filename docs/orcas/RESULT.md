@@ -80,27 +80,27 @@ ok  	github.com/orcastor/orcas/sdk	8.102s
 
 ## 大文件
 
-### 准备了2个dmg文件（1.07GB + 920.8MB）
+### 准备了16个pkg文件（144.44MB*16=2.32GB）
 
 |项|结果|
 |-|-|
-|速率|上传9.77秒 ≈208.57 MB/s，下载7.30秒 ≈279.15 MB/s|
-|空间|原始文件夹1.99GB，写入后1.8GB|
+|速率|上传6.56秒 ≈353.66 MB/s，下载3.34秒 ≈694.61 MB/s|
+|空间|原始文件夹2.32GB，写入后2.32GB|
 
 ```sh
 /usr/local/go/bin/go test github.com/orcastor/orcas/sdk -v
 === RUN   TestUpload
---- PASS: TestUpload (9.77s)
+--- PASS: TestUpload (6.56s)
 === RUN   TestDownload
---- PASS: TestDownload (7.30s)
+--- PASS: TestDownload (3.34)
 === RUN   TestCheck
---- PASS: TestCheck (5.85s)
+--- PASS: TestCheck (3.87s)
 PASS
-ok  	github.com/orcastor/orcas/sdk	22.965s
+ok  	github.com/orcastor/orcas/sdk	14.34s
 ```
 
 读写改成USB2.0外挂移动硬盘，西数 2T HDD，exFAT文件系统
-> 上传20秒 ≈101.88 MB/s，下载12秒 ≈169.81 MB/s
+> 上传21秒 ≈110.48 MB/s，下载13秒 ≈178.46 MB/s
 
 ## 待改进
 
