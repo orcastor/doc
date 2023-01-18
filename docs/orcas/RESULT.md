@@ -84,19 +84,19 @@ ok  	github.com/orcastor/orcas/sdk	8.102s
 
 |项|结果|
 |-|-|
-|速率|上传6.56秒 ≈353.66 MB/s，下载3.34秒 ≈694.61 MB/s|
+|速率|上传4.77秒 ≈486.37 MB/s，下载2.95秒 ≈786.44 MB/s|
 |空间|原始文件夹2.32GB，写入后2.32GB|
 
 ```sh
 /usr/local/go/bin/go test github.com/orcastor/orcas/sdk -v
 === RUN   TestUpload
---- PASS: TestUpload (6.56s)
+--- PASS: TestUpload (4.77s)
 === RUN   TestDownload
---- PASS: TestDownload (3.34s)
+--- PASS: TestDownload (2.95s)
 === RUN   TestCheck
---- PASS: TestCheck (3.87s)
+--- PASS: TestCheck (3.86s)
 PASS
-ok  	github.com/orcastor/orcas/sdk	14.34s
+ok  	github.com/orcastor/orcas/sdk	12.045s
 ```
 
 读写改成USB2.0外挂移动硬盘，西数 2T HDD，exFAT文件系统
