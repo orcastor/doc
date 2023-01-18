@@ -80,7 +80,7 @@ ok  	github.com/orcastor/orcas/sdk	8.102s
 
 ## 大文件
 
-### 准备了16个pkg文件（144.44MB*16=2.32GB）
+### 准备了16个144.44MB大小的文件（2.32GB）
 
 |项|结果|
 |-|-|
@@ -92,7 +92,7 @@ ok  	github.com/orcastor/orcas/sdk	8.102s
 === RUN   TestUpload
 --- PASS: TestUpload (6.56s)
 === RUN   TestDownload
---- PASS: TestDownload (3.34)
+--- PASS: TestDownload (3.34s)
 === RUN   TestCheck
 --- PASS: TestCheck (3.87s)
 PASS
