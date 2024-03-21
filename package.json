@@ -15,10 +15,10 @@
     "@vuepress/plugin-nprogress": "^1.2.0",
     "@vuepress/plugin-pwa": "^1.2.0",
     "moment": "^2.29.4",
-    "vuepress": "^1.9.10"
+    "vuepress": "^1.9.7"
   },
   "scripts": {
-    "docs:dev": "vuepress --openssl-legacy-provider dev",
-    "docs:build": "vuepress --openssl-legacy-provider build"
+    "docs:dev": "set NODE_OPTIONS=\"--openssl-legacy-provider\" & vuepress dev docs",
+    "docs:build": "set NODE_OPTIONS=\"--openssl-legacy-provider\" & vuepress build docs"
   }
 }
