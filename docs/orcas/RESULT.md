@@ -75,7 +75,7 @@ PASS
 ok  	github.com/orcastor/orcas/sdk	8.102s
 ```
 
-读写改成USB2.0外挂移动硬盘，西数 2T HDD，exFAT文件系统
+读写改成USB3.0外挂移动硬盘，西数 2T HDD，exFAT文件系统
 > 上传9秒 ≈1111 pcs/s，下载3秒 ≈3333 pcs/s
 
 ## 大文件
@@ -99,7 +99,7 @@ PASS
 ok  	github.com/orcastor/orcas/sdk	12.045s
 ```
 
-读写改成USB2.0外挂移动硬盘，西数 2T HDD，exFAT文件系统
+读写改成USB3.0外挂移动硬盘，西数 2T HDD，exFAT文件系统
 > 上传21秒 ≈110.48 MB/s，下载13秒 ≈178.46 MB/s
 
 ## 待改进
