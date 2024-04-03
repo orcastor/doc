@@ -50,10 +50,11 @@
   - 支持上传下载的基础功能
   - 以及额外的比如秒传、压缩、加密、打包等
 
-⏳ 支持网络协议
-  - 中间增加网络传输层，补充鉴权逻辑
+☑️ 支持网络协议
+  - 中间增加[网络传输层]((https://github.com/orcastor/orcas/blob/master/rpc)，补充[鉴权逻辑](https://github.com/orcastor/orcas/blob/master/core/auth.go)
   - 支持多种常见网络协议
-  - 支持cli工具、前端管理页面
+  - 支持[cli工具](https://github.com/orcastor/orcas/blob/master/sdk/sdk_test.go)、[前端管理页面](https://github.com/orcastor/admin)
+  - 支持[前端界面](https://github.com/orcastor/webapp)
 
 ⏳ 支持docker
   - 支持开箱即用（借鉴`MinIO`）

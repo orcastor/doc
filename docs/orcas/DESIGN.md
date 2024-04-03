@@ -435,7 +435,7 @@ osi.uploadFiles(c, bktID, f1, d1, dp, FULL, doneAction|HDR_CRC32)
 // 如果开启智能压缩，检查文件类型确定是否要压缩
 if l.cfg.WiseCmpr > 0 {
 	kind, _ := filetype.Match(buf)
-	if CmprBlacklist[kind.MIME.Value] == 0 {
+	if kind == filetype.Unknown { // 多媒体、存档、应用
 		// 不在黑名单里，开启压缩
 		l.d.Kind |= l.cfg.WiseCmpr
 		if l.cfg.WiseCmpr&core.DATA_CMPR_SNAPPY != 0 {
