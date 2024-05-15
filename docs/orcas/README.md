@@ -51,7 +51,7 @@
   - 以及额外的比如秒传、压缩、加密、打包等
 
 ☑️ 支持网络协议
-  - 中间增加[网络传输层]((https://github.com/orcastor/orcas/blob/master/rpc)，补充[鉴权逻辑](https://github.com/orcastor/orcas/blob/master/core/auth.go)
+  - 中间增加[网络传输层](https://github.com/orcastor/orcas/blob/master/rpc)，补充[鉴权逻辑](https://github.com/orcastor/orcas/blob/master/core/auth.go)
   - 支持多种常见网络协议
   - 支持[cli工具](https://github.com/orcastor/orcas/blob/master/sdk/sdk_test.go)、[前端管理页面](https://github.com/orcastor/admin)
   - 支持[前端界面](https://github.com/orcastor/webapp)
